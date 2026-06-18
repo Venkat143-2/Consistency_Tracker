@@ -81,7 +81,7 @@ export default function App() {
       if (!user && !token && currentPath === "/dashboard") {
         navigateTo("/login");
       }
-      if (user && token && (currentPath === "/login" || currentPath === "/register")) {
+      if (user && token && (currentPath === "/login" || currentPath === "/register" || currentPath === "/signup")) {
         navigateTo("/dashboard");
       }
     }
@@ -411,17 +411,17 @@ export default function App() {
         <Auth
           onLoginSuccess={handleLoginSuccess}
           defaultView="login"
-          onViewChange={(view) => navigateTo(view === "login" ? "/login" : "/register")}
+          onViewChange={(view) => navigateTo(view === "login" ? "/login" : "/signup")}
           onNavigateHome={() => navigateTo("/")}
         />
       );
     }
-    if (currentPath === "/register") {
+    if (currentPath === "/register" || currentPath === "/signup") {
       return (
         <Auth
           onLoginSuccess={handleLoginSuccess}
           defaultView="register"
-          onViewChange={(view) => navigateTo(view === "login" ? "/login" : "/register")}
+          onViewChange={(view) => navigateTo(view === "login" ? "/login" : "/signup")}
           onNavigateHome={() => navigateTo("/")}
         />
       );
@@ -434,7 +434,7 @@ export default function App() {
   if (currentPath === "/") {
     return <LandingPage onNavigate={navigateTo} isLoggedIn={true} />;
   }
-  if (currentPath === "/login" || currentPath === "/register") {
+  if (currentPath === "/login" || currentPath === "/register" || currentPath === "/signup") {
     // Will be auto-redirected to /dashboard by effect, but immediately render LandingPage
     return <LandingPage onNavigate={navigateTo} isLoggedIn={true} />;
   }
