@@ -15,6 +15,7 @@ import { AchievementsSection } from "./components/AchievementsSection";
 import { ProfileSection } from "./components/ProfileSection";
 import { SettingsSection } from "./components/SettingsSection";
 import { User, Task, DailyStats, Badge } from "./types";
+import { supabase } from "./lib/supabaseClient";
 import {
   LayoutGrid,
   CheckSquare,
@@ -86,35 +87,76 @@ export default function App() {
     }
   }, [sessionLoading, user, token, currentPath]);
 
-  // Load active session
+  // Load active session with Supabase and sync with local state
   useEffect(() => {
+    let mounted = true;
     const fetchSession = async () => {
-      if (!token) {
-        setSessionLoading(false);
-        return;
-      }
       try {
-        const res = await fetch("/api/auth/me", {
-          headers: { Authorization: `Bearer ${token}` },
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          const usernameVal = session.user.user_metadata?.username || session.user.email?.split("@")[0] || "User";
+          const res = await fetch("/api/auth/sync", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: session.user.id, email: session.user.email, username: usernameVal }),
+          });
+          const data = await res.json();
+          if (res.ok && data.user && mounted) {
+            setUser(data.user);
+            setToken(data.token);
+            localStorage.setItem("ct_token", data.token);
+            await syncTrackerData(data.user.id, data.token);
+          } else if (mounted) {
+            setToken(null);
+            setUser(null);
+            localStorage.removeItem("ct_token");
+          }
+        } else {
+          if (mounted) {
+            setToken(null);
+            setUser(null);
+            localStorage.removeItem("ct_token");
+          }
+        }
+      } catch (err) {
+        console.error("Supabase session verification failed:", err);
+      } finally {
+        if (mounted) {
+          setSessionLoading(false);
+        }
+      }
+    };
+    fetchSession();
+
+    // Setup an auth trace callback to keep systems fully synced reactive
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!mounted) return;
+      if (session?.user) {
+        const usernameVal = session.user.user_metadata?.username || session.user.email?.split("@")[0] || "User";
+        const res = await fetch("/api/auth/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: session.user.id, email: session.user.email, username: usernameVal }),
         });
         const data = await res.json();
         if (res.ok && data.user) {
           setUser(data.user);
-          // Load other core data
-          await syncTrackerData(data.user.id, token);
-        } else {
-          // Token expired
-          setToken(null);
-          localStorage.removeItem("ct_token");
+          setToken(data.token);
+          localStorage.setItem("ct_token", data.token);
+          await syncTrackerData(data.user.id, data.token);
         }
-      } catch (err) {
-        console.error("Session verification failed:", err);
-      } finally {
-        setSessionLoading(false);
+      } else {
+        setUser(null);
+        setToken(null);
+        localStorage.removeItem("ct_token");
       }
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
     };
-    fetchSession();
-  }, [token]);
+  }, []);
 
   // Sync tasks, metrics, badges, charts
   const syncTrackerData = async (userId: string, activeToken: string) => {
@@ -180,7 +222,12 @@ export default function App() {
     navigateTo("/dashboard");
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error("Supabase sign out error:", err);
+    }
     setToken(null);
     setUser(null);
     setTasks([]);

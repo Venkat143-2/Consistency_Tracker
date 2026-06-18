@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from "react";
 import { Mail, Lock, User as UserIcon, ArrowRight, Eye, EyeOff, ShieldCheck } from "lucide-react";
+import { supabase } from "../lib/supabaseClient";
 
 interface AuthProps {
   onLoginSuccess: (token: string) => void;
@@ -46,22 +47,29 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
     setLoading(true);
 
     try {
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
       });
-      const data = await response.json();
 
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to log in.");
-      }
+      if (signInError) throw signInError;
 
-      // If successful
-      if (rememberMe) {
-        localStorage.setItem("ct_token", data.token);
+      if (data.user) {
+        // Sync with backend local memory storage representation
+        const usernameVal = data.user.user_metadata?.username || data.user.email?.split("@")[0] || "User";
+        const response = await fetch("/api/auth/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: data.user.id, email: data.user.email, username: usernameVal }),
+        });
+        const syncData = await response.json();
+        if (!response.ok) throw new Error(syncData.error || "Failed to sync Supabase session with application backend.");
+
+        if (rememberMe) {
+          localStorage.setItem("ct_token", syncData.token);
+        }
+        onLoginSuccess(syncData.token);
       }
-      onLoginSuccess(data.token);
     } catch (err: any) {
       setError(err.message || "Something went wrong.");
     } finally {
@@ -88,30 +96,42 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
     setLoading(true);
 
     try {
-      const response = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, email, password }),
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            username,
+          },
+        },
       });
-      const data = await response.json();
 
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to register.");
-      }
+      if (signUpError) throw signUpError;
 
-      // Success message as requested: "A verification email has been sent. Please verify your account."
-      setSuccessMsg("A verification email has been sent. Please verify your account.");
-      
-      // Auto verify and let user log in after 3 seconds, or let them switch
-      setTimeout(() => {
-        if (data.token) {
-          if (rememberMe) {
-            localStorage.setItem("ct_token", data.token);
+      if (data.user) {
+        // Sync registration details
+        const response = await fetch("/api/auth/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: data.user.id, email: data.user.email, username }),
+        });
+        const syncData = await response.json();
+        if (!response.ok) throw new Error(syncData.error || "Failed to sync registered profile.");
+
+        setSuccessMsg("A verification email has been sent. Please verify your account.");
+        
+        // Let user log in right away in sandbox development, or wait
+        setTimeout(() => {
+          if (syncData.token) {
+            if (rememberMe) {
+              localStorage.setItem("ct_token", syncData.token);
+            }
+            onLoginSuccess(syncData.token);
           }
-          onLoginSuccess(data.token);
-        }
-      }, 3500);
-
+        }, 3500);
+      } else {
+        setError("Sign up succeeded but user details were empty. Please verify your inbox.");
+      }
     } catch (err: any) {
       setError(err.message || "Failed to register.");
     } finally {
@@ -129,13 +149,10 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
     setLoading(true);
 
     try {
-      const response = await fetch("/api/auth/forgot-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/login?view=reset`,
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error);
+      if (resetError) throw resetError;
 
       setSuccessMsg("Password reset link sent to registered email. Proceeding to Reset form...");
       setTimeout(() => {
@@ -163,26 +180,29 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
     setLoading(true);
 
     try {
-      const response = await fetch("/api/auth/reset-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+      const { error: updateError } = await supabase.auth.updateUser({
+        password,
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error);
+      if (updateError) throw updateError;
 
       setSuccessMsg("Password updated successfully. Loading Dashboard...");
-      
-      const loginRes = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-      const loginData = await loginRes.json();
-      if (loginRes.ok && loginData.token) {
-        setTimeout(() => {
-          onLoginSuccess(loginData.token);
-        }, 1500);
+
+      const { data: { user: supabaseUser } } = await supabase.auth.getUser();
+      if (supabaseUser) {
+        const usernameVal = supabaseUser.user_metadata?.username || supabaseUser.email?.split("@")[0] || "User";
+        const response = await fetch("/api/auth/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: supabaseUser.id, email: supabaseUser.email, username: usernameVal }),
+        });
+        const syncData = await response.json();
+        if (response.ok && syncData.token) {
+          setTimeout(() => {
+            onLoginSuccess(syncData.token);
+          }, 1500);
+        } else {
+          setView("login");
+        }
       } else {
         setView("login");
       }

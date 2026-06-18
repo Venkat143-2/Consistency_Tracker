@@ -400,6 +400,64 @@ export const dbService = {
     return Object.values(db.users).find((u) => u.email.toLowerCase() === lEmail) || null;
   },
 
+  getOrCreateUser: (id: string, email: string, username: string): User => {
+    const db = readDB();
+    if (db.users[id]) {
+      return db.users[id];
+    }
+
+    // Check if user has a profile with the same email already
+    const existingUser = Object.values(db.users).find((u) => u.email.toLowerCase() === email.toLowerCase().trim());
+    if (existingUser) {
+      const oldId = existingUser.id;
+      const mappedUser: User = {
+        ...existingUser,
+        id,
+        isVerified: true,
+      };
+      db.users[id] = { ...mappedUser, passwordHash: db.users[oldId]?.passwordHash || "supabase_managed" };
+      db.userBadges[id] = db.userBadges[oldId] || [];
+      
+      db.tasks.forEach((t) => { if (t.userId === oldId) t.userId = id; });
+      db.completions.forEach((c) => { if (c.userId === oldId) c.userId = id; });
+      db.dailyStats.forEach((s) => { if (s.userId === oldId) s.userId = id; });
+
+      delete db.users[oldId];
+      delete db.userBadges[oldId];
+      writeDB(db);
+      return mappedUser;
+    }
+
+    // Create a fresh user with this exact ID
+    const avatarLetter = (username || "U").charAt(0).toUpperCase();
+    const avatarColor = ["bg-blue-600", "bg-cyan-600", "bg-indigo-600", "bg-emerald-600", "bg-rose-600"][Math.floor(Math.random() * 5)];
+    const avatar = `letter:${avatarLetter}:${avatarColor}`;
+
+    const newUser: User = {
+      id,
+      username,
+      email: email.toLowerCase().trim(),
+      profilePicture: avatar,
+      createdAt: new Date().toISOString(),
+      currentStreak: 0,
+      longestStreak: 0,
+      totalTasksCompleted: 0,
+      notificationEnabled: true,
+      reminderTime: "09:00 AM",
+      theme: "dark",
+      isVerified: true,
+    };
+
+    db.users[id] = { ...newUser, passwordHash: "supabase_managed" };
+    db.userBadges[id] = [];
+    writeDB(db);
+
+    ensureTasksForDay(id, getLocalDateString());
+    recalculateCoreMetrics(id);
+
+    return newUser;
+  },
+
   createUser: (username: string, email: string, passwordHash: string): User => {
     const db = readDB();
     const id = "usr_" + Math.random().toString(36).substring(2, 11);

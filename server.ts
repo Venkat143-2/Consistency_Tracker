@@ -151,6 +151,21 @@ async function startServer() {
     res.json({ message: "Your password has been successfully updated. Please log in." });
   });
 
+  // Auth: Sync Supabase User with Local Profile
+  app.post("/api/auth/sync", (req: Request, res: Response) => {
+    try {
+      const { id, email, username } = req.body;
+      if (!id || !email) {
+        res.status(400).json({ error: "Missing required sync parameters id and email." });
+        return;
+      }
+      const user = dbService.getOrCreateUser(id, email, username || email.split("@")[0]);
+      res.json({ user, token: id });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || "Session sync failed." });
+    }
+  });
+
   // Auth: Me Info
   app.get("/api/auth/me", authenticateUser, (req: Request, res: Response) => {
     const user = (req as any).user;
