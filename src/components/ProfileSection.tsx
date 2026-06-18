@@ -14,10 +14,8 @@ import {
   CheckCircle,
   Camera,
   Layers,
-  Sparkles,
   TrendingUp,
-  Activity,
-  Check
+  Activity
 } from "lucide-react";
 
 interface ProfileSectionProps {

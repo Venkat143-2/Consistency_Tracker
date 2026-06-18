@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from "react";
-import { Plus, Search, Trash2, Edit3, CheckCircle2, Circle, ListFilter, Tag, RefreshCcw, GripVertical, HelpCircle } from "lucide-react";
+import { Plus, Search, Trash2, Edit3, CheckCircle2, Circle, RefreshCcw, GripVertical, HelpCircle } from "lucide-react";
 import { Task, TaskCategory } from "../types";
 
 interface TaskSectionProps {

@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from "react";
-import { ChevronLeft, ChevronRight, HelpCircle, Calendar, CheckSquare, Info } from "lucide-react";
+import { Calendar, CheckSquare } from "lucide-react";
 
 interface DailyStats {
   id: string;

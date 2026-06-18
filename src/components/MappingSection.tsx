@@ -4,7 +4,7 @@
  */
 
 import React from "react";
-import { CheckCircle2, Circle, HelpCircle, ShieldCheck } from "lucide-react";
+import { CheckCircle2, Circle, ShieldCheck } from "lucide-react";
 import { Task } from "../types";
 
 interface MappingSectionProps {

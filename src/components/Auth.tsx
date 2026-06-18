@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { Mail, Lock, User as UserIcon, Keyboard, ArrowRight, Eye, EyeOff, ShieldCheck } from "lucide-react";
+import { Mail, Lock, User as UserIcon, ArrowRight, Eye, EyeOff, ShieldCheck } from "lucide-react";
 
 interface AuthProps {
   onLoginSuccess: (token: string) => void;

@@ -13,7 +13,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { TrendingUp, Activity, CheckCircle, Clock } from "lucide-react";
+import { TrendingUp, CheckCircle, Clock } from "lucide-react";
 import { Heatmap } from "./Heatmap";
 
 interface DailyStats {

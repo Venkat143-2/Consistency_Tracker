@@ -31,15 +31,11 @@ import {
   CheckCircle2,
   Calendar,
   Sparkles,
-  Award,
   Compass,
   Trophy,
   Target,
-  ArrowRight,
   ChevronLeft,
   ChevronRight,
-  TrendingUp,
-  MapPin,
   Map
 } from "lucide-react";
 

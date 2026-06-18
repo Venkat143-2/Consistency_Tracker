@@ -14,7 +14,6 @@ import {
   Sun,
   Clock,
   AlertTriangle,
-  Lock,
   Compass,
   Check
 } from "lucide-react";

@@ -3,7 +3,7 @@
  * Apache-2.0
  */
 
-import React, { useState } from "react";
+import React from "react";
 import { motion } from "motion/react";
 import {
   ShieldCheck,
@@ -14,7 +14,6 @@ import {
   TrendingUp,
   BarChart3,
   Calendar,
-  Lock,
   Compass,
   Sparkles,
   Award,
