@@ -1,0 +1,8 @@
+{
+  "name": "Consistency Tracker",
+  "description": "A premium SaaS productivity platform to track daily habits, manage tasks, maintain streaks, and visualize consistency.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
