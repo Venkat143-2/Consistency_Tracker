@@ -7,6 +7,23 @@ import React, { useState, useEffect } from "react";
 import { Mail, Lock, User as UserIcon, ArrowRight, Eye, EyeOff, ShieldCheck } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 
+async function safeFetchJson(url: string, options: RequestInit): Promise<any> {
+  const response = await fetch(url, options);
+  const text = await response.text();
+  try {
+    const data = JSON.parse(text);
+    if (!response.ok) {
+      throw new Error(data.error || `Server responded with error status ${response.status}`);
+    }
+    return data;
+  } catch (err: any) {
+    if (!response.ok) {
+      throw new Error(`Server returned status ${response.status}: ${response.statusText || "Request failed"}`);
+    }
+    throw new Error(err.message || "Unable to parse server response.");
+  }
+}
+
 interface AuthProps {
   onLoginSuccess: (token: string) => void;
   defaultView?: "login" | "register" | "forgot" | "reset";
@@ -57,13 +74,11 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
       if (data.user) {
         // Sync with backend local memory storage representation
         const usernameVal = data.user.user_metadata?.username || data.user.email?.split("@")[0] || "User";
-        const response = await fetch("/api/auth/sync", {
+        const syncData = await safeFetchJson("/api/auth/sync", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id: data.user.id, email: data.user.email, username: usernameVal }),
         });
-        const syncData = await response.json();
-        if (!response.ok) throw new Error(syncData.error || "Failed to sync Supabase session with application backend.");
 
         if (rememberMe) {
           localStorage.setItem("ct_token", syncData.token);
@@ -110,13 +125,11 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
 
       if (data.user) {
         // Sync registration details
-        const response = await fetch("/api/auth/sync", {
+        const syncData = await safeFetchJson("/api/auth/sync", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id: data.user.id, email: data.user.email, username }),
         });
-        const syncData = await response.json();
-        if (!response.ok) throw new Error(syncData.error || "Failed to sync registered profile.");
 
         setSuccessMsg("A verification email has been sent. Please verify your account.");
         
@@ -190,17 +203,20 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
       const { data: { user: supabaseUser } } = await supabase.auth.getUser();
       if (supabaseUser) {
         const usernameVal = supabaseUser.user_metadata?.username || supabaseUser.email?.split("@")[0] || "User";
-        const response = await fetch("/api/auth/sync", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: supabaseUser.id, email: supabaseUser.email, username: usernameVal }),
-        });
-        const syncData = await response.json();
-        if (response.ok && syncData.token) {
-          setTimeout(() => {
-            onLoginSuccess(syncData.token);
-          }, 1500);
-        } else {
+        try {
+          const syncData = await safeFetchJson("/api/auth/sync", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: supabaseUser.id, email: supabaseUser.email, username: usernameVal }),
+          });
+          if (syncData && syncData.token) {
+            setTimeout(() => {
+              onLoginSuccess(syncData.token);
+            }, 1500);
+          } else {
+            setView("login");
+          }
+        } catch {
           setView("login");
         }
       } else {
