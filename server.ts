@@ -17,12 +17,11 @@ function getDaysBetween(d1: string, d2: string): number {
   return Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
 }
 
-async function startServer() {
-  const app = express();
-  const PORT = 3000;
+const app = express();
+const PORT = 3000;
 
-  // Middlewares
-  app.use(express.json({ limit: "15mb" }));
+// Middlewares
+app.use(express.json({ limit: "15mb" }));
 
   // Simplistic auth token handler
   // Handled either by a Header "Authorization: Bearer <user_id>" or dynamic parameters
@@ -401,23 +400,28 @@ async function startServer() {
 
   // --- VITE DEV/PRODUCTION SETUP ---
 
-  if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("*", (req: Request, res: Response) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
+  async function setupViteAndListen() {
+    if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: "spa",
+      });
+      app.use(vite.middlewares);
+    } else if (!process.env.VERCEL) {
+      const distPath = path.join(process.cwd(), "dist");
+      app.use(express.static(distPath));
+      app.get("*", (req: Request, res: Response) => {
+        res.sendFile(path.join(distPath, "index.html"));
+      });
+    }
+
+    if (!process.env.VERCEL) {
+      app.listen(PORT, "0.0.0.0", () => {
+        console.log(`Consistency Tracker Server running on http://localhost:${PORT}`);
+      });
+    }
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Consistency Tracker Server running on http://localhost:${PORT}`);
-  });
-}
+  setupViteAndListen();
 
-startServer();
+export default app;
