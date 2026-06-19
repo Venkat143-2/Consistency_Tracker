@@ -10,6 +10,12 @@ import { supabase } from "../lib/supabaseClient";
 async function safeFetchJson(url: string, options: RequestInit): Promise<any> {
   const response = await fetch(url, options);
   const text = await response.text();
+  
+  const trimmed = text.trim();
+  if (trimmed.startsWith("<!DOCTYPE") || trimmed.startsWith("<html") || trimmed.includes("The page cannot be found")) {
+    throw new Error(`Server returned HTML instead of JSON. Ensure the server is running and the route '${url}' is registered.`);
+  }
+
   try {
     const data = JSON.parse(text);
     if (!response.ok) {

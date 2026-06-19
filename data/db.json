@@ -1,0 +1,84 @@
+{
+  "users": {
+    "test": {
+      "id": "test",
+      "username": "testuser",
+      "email": "test@example.com",
+      "profilePicture": "letter:T:bg-blue-600",
+      "createdAt": "2026-06-19T05:21:52.016Z",
+      "currentStreak": 0,
+      "longestStreak": 0,
+      "totalTasksCompleted": 0,
+      "notificationEnabled": true,
+      "reminderTime": "09:00 AM",
+      "theme": "dark",
+      "isVerified": true,
+      "passwordHash": "supabase_managed"
+    }
+  },
+  "tasks": [
+    {
+      "id": "raw_fj5jett7k",
+      "userId": "test",
+      "title": "DSA Practice Problems",
+      "category": "DSA",
+      "createdAt": "2026-06-19T05:21:52.017Z",
+      "completedToday": false
+    },
+    {
+      "id": "raw_4foy4l4m9",
+      "userId": "test",
+      "title": "Java Development Concepts",
+      "category": "Java",
+      "createdAt": "2026-06-19T05:21:52.017Z",
+      "completedToday": false
+    },
+    {
+      "id": "raw_uzyb5m0tr",
+      "userId": "test",
+      "title": "Communication Skills Accent & Pitch",
+      "category": "Communication",
+      "createdAt": "2026-06-19T05:21:52.017Z",
+      "completedToday": false
+    },
+    {
+      "id": "raw_d4hfkflvq",
+      "userId": "test",
+      "title": "Aptitude & Logical Reasoning Drills",
+      "category": "Aptitude",
+      "createdAt": "2026-06-19T05:21:52.017Z",
+      "completedToday": false
+    },
+    {
+      "id": "raw_lvpfflvuy",
+      "userId": "test",
+      "title": "Fitness Gym / Running Routine",
+      "category": "Fitness",
+      "createdAt": "2026-06-19T05:21:52.017Z",
+      "completedToday": false
+    },
+    {
+      "id": "raw_quyw53gpw",
+      "userId": "test",
+      "title": "Read 10 Pages of Philosophy",
+      "category": "Reading",
+      "createdAt": "2026-06-19T05:21:52.017Z",
+      "completedToday": false
+    }
+  ],
+  "completions": [],
+  "dailyStats": [
+    {
+      "id": "stat_test_2026-06-19",
+      "userId": "test",
+      "date": "2026-06-19",
+      "totalTasks": 6,
+      "completedTasks": 0,
+      "completionPercentage": 0,
+      "streakCount": 0
+    }
+  ],
+  "userBadges": {
+    "test": []
+  }
+}
