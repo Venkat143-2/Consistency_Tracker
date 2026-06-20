@@ -404,7 +404,7 @@ export const dbService = {
   getUserByEmail: (email: string) => {
     const db = readDB();
     const lEmail = email.toLowerCase().trim();
-    return Object.values(db.users).find((u) => u.email.toLowerCase() === lEmail) || null;
+    return Object.values(db.users).find((u) => u && typeof u.email === "string" && u.email.toLowerCase() === lEmail) || null;
   },
 
   getOrCreateUser: (id: string, email: string, username: string): User => {
@@ -414,7 +414,7 @@ export const dbService = {
     }
 
     // Check if user has a profile with the same email already
-    const existingUser = Object.values(db.users).find((u) => u.email.toLowerCase() === email.toLowerCase().trim());
+    const existingUser = Object.values(db.users).find((u) => u && typeof u.email === "string" && u.email.toLowerCase() === email.toLowerCase().trim());
     if (existingUser) {
       const oldId = existingUser.id;
       const mappedUser: User = {

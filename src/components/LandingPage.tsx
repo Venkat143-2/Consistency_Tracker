@@ -202,7 +202,7 @@ export function LandingPage({ onNavigate, isLoggedIn }: LandingPageProps) {
                   </div>
                 </div>
                 
-                <h4 className="text-sm font-bold text-white mt-1">7-Day Streak Certified</h4>
+                <h4 className="text-sm font-bold text-white mt-1">7-Day Streak</h4>
                 
                 <div className="flex items-center justify-between gap-1.5 mt-3.5">
                   {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day, idx) => (
