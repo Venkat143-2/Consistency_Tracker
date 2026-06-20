@@ -5,7 +5,6 @@
 
 import express, { Request, Response, NextFunction } from "express";
 import path from "path";
-import { createServer as createViteServer } from "vite";
 import { dbService, getLocalDateString } from "./server/db";
 import { TaskCategory } from "./src/types";
 
@@ -180,6 +179,23 @@ app.use(express.json({ limit: "15mb" }));
       res.json({ tasks });
     } catch (err: any) {
       res.status(500).json({ error: err.message || "Failed to load tasks." });
+    }
+  });
+
+  // Tasks: Reorder
+  app.post("/api/tasks/reorder", authenticateUser, (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+      const { taskIds, date } = req.body;
+      if (!Array.isArray(taskIds)) {
+        res.status(400).json({ error: "taskIds must be an array of task IDs." });
+        return;
+      }
+      const targetDate = date || getLocalDateString();
+      const tasks = dbService.reorderTasks(user.id, taskIds, targetDate);
+      res.json({ success: true, tasks });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || "Failed to reorder tasks." });
     }
   });
 
@@ -402,6 +418,7 @@ app.use(express.json({ limit: "15mb" }));
 
   async function setupViteAndListen() {
     if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
+      const { createServer: createViteServer } = await import("vite");
       const vite = await createViteServer({
         server: { middlewareMode: true },
         appType: "spa",

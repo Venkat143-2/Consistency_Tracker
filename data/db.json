@@ -14,71 +14,28 @@
       "theme": "dark",
       "isVerified": true,
       "passwordHash": "supabase_managed"
+    },
+    "6f9b775e-cb0d-4c2f-92f1-22107bbef004": {
+      "id": "6f9b775e-cb0d-4c2f-92f1-22107bbef004",
+      "username": "vicky",
+      "email": "vicky143244@gmail.com",
+      "profilePicture": "linear-gradient(135deg, #1E293B, #0F172A)",
+      "createdAt": "2026-06-20T09:24:14.293Z",
+      "currentStreak": 0,
+      "longestStreak": 0,
+      "totalTasksCompleted": 0,
+      "notificationEnabled": true,
+      "reminderTime": "09:00 AM",
+      "theme": "dark",
+      "isVerified": true,
+      "passwordHash": "supabase_managed"
     }
   },
-  "tasks": [
-    {
-      "id": "raw_fj5jett7k",
-      "userId": "test",
-      "title": "DSA Practice Problems",
-      "category": "DSA",
-      "createdAt": "2026-06-19T05:21:52.017Z",
-      "completedToday": false
-    },
-    {
-      "id": "raw_4foy4l4m9",
-      "userId": "test",
-      "title": "Java Development Concepts",
-      "category": "Java",
-      "createdAt": "2026-06-19T05:21:52.017Z",
-      "completedToday": false
-    },
-    {
-      "id": "raw_uzyb5m0tr",
-      "userId": "test",
-      "title": "Communication Skills Accent & Pitch",
-      "category": "Communication",
-      "createdAt": "2026-06-19T05:21:52.017Z",
-      "completedToday": false
-    },
-    {
-      "id": "raw_d4hfkflvq",
-      "userId": "test",
-      "title": "Aptitude & Logical Reasoning Drills",
-      "category": "Aptitude",
-      "createdAt": "2026-06-19T05:21:52.017Z",
-      "completedToday": false
-    },
-    {
-      "id": "raw_lvpfflvuy",
-      "userId": "test",
-      "title": "Fitness Gym / Running Routine",
-      "category": "Fitness",
-      "createdAt": "2026-06-19T05:21:52.017Z",
-      "completedToday": false
-    },
-    {
-      "id": "raw_quyw53gpw",
-      "userId": "test",
-      "title": "Read 10 Pages of Philosophy",
-      "category": "Reading",
-      "createdAt": "2026-06-19T05:21:52.017Z",
-      "completedToday": false
-    }
-  ],
+  "tasks": [],
   "completions": [],
-  "dailyStats": [
-    {
-      "id": "stat_test_2026-06-19",
-      "userId": "test",
-      "date": "2026-06-19",
-      "totalTasks": 6,
-      "completedTasks": 0,
-      "completionPercentage": 0,
-      "streakCount": 0
-    }
-  ],
+  "dailyStats": [],
   "userBadges": {
-    "test": []
+    "test": [],
+    "6f9b775e-cb0d-4c2f-92f1-22107bbef004": []
   }
 }

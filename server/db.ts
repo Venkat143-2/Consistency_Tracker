@@ -152,7 +152,7 @@ function writeDB(data: DBLocalSchema) {
 }
 
 // Daily carrying forward utility
-// Ensure tasks exist for today, else clone unfinished ones from yesterday
+// Ensure tasks exist for today, else clone ones from yesterday
 export function ensureTasksForDay(userId: string, targetDate: string): Task[] {
   const db = readDB();
   
@@ -165,7 +165,7 @@ export function ensureTasksForDay(userId: string, targetDate: string): Task[] {
     return targetDateTasks;
   }
 
-  // Otherwise, today is empty. We need to auto carry forward!
+  // Otherwise, today is empty. We need to auto carry forward yesterday's tasks!
   // Find tasks from "yesterday"
   const yesterdayDate = new Date(new Date(targetDate).getTime() - 24 * 60 * 60 * 1000);
   const yesterdayString = getLocalDateString(yesterdayDate);
@@ -174,61 +174,24 @@ export function ensureTasksForDay(userId: string, targetDate: string): Task[] {
   let tasksToCarry: Omit<Task, "id" | "createdAt">[] = [];
 
   if (yesterdayTasks.length > 0) {
-    // Find completions from yesterday
-    const completedYesterdayTaskIds = db.completions
-      .filter((c) => c.userId === userId && c.completionDate === yesterdayString)
-      .map((c) => c.taskId);
+    // Sort yesterday's tasks by displayOrder to preserve their sequence
+    const sortedYesterdayTasks = [...yesterdayTasks].sort((a, b) => {
+      const orderA = a.displayOrder !== undefined ? a.displayOrder : 0;
+      const orderB = b.displayOrder !== undefined ? b.displayOrder : 0;
+      return orderA - orderB;
+    });
 
-    // Get any yesterday task NOT in completedYesterdayTaskIds list
-    const uncompletedYesterdayTasks = yesterdayTasks.filter((t) => !completedYesterdayTaskIds.includes(t.id));
-
-    if (uncompletedYesterdayTasks.length > 0) {
-      // Carry forward the actual unfinished tasks
-      tasksToCarry = uncompletedYesterdayTasks.map((t) => ({
-        userId: userId,
-        title: t.title,
-        category: t.category,
-        completedToday: false,
-      }));
-    } else {
-      // If yesterday's tasks were all completed, carry forward all profiles so the user isn't blank,
-      // or copy everything to restart. Let's copy all of yesterday's tasks as templates!
-      tasksToCarry = yesterdayTasks.map((t) => ({
-        userId: userId,
-        title: t.title,
-        category: t.category,
-        completedToday: false,
-      }));
-    }
+    tasksToCarry = sortedYesterdayTasks.map((t, index) => ({
+      userId: userId,
+      title: t.title,
+      category: t.category,
+      completedToday: false,
+      displayOrder: t.displayOrder !== undefined ? t.displayOrder : index,
+    }));
   } else {
-    // No tasks from yesterday either! Check if there are any previous tasks at all
-    const newestTaskCreatedAt = usersTasks.reduce((max, t) => (t.createdAt > max ? t.createdAt : max), "");
-    if (newestTaskCreatedAt) {
-      const parentDate = newestTaskCreatedAt.split("T")[0];
-      const parentTasks = usersTasks.filter((t) => t.createdAt.startsWith(parentDate));
-      tasksToCarry = parentTasks.map((t) => ({
-        userId: userId,
-        title: t.title,
-        category: t.category,
-        completedToday: false,
-      }));
-    } else {
-      // Absolute first day or fresh user! Seed SIX default tasks
-      const defaults: { title: string; category: TaskCategory }[] = [
-        { title: "DSA Practice Problems", category: "DSA" },
-        { title: "Java Development Concepts", category: "Java" },
-        { title: "Communication Skills Accent & Pitch", category: "Communication" },
-        { title: "Aptitude & Logical Reasoning Drills", category: "Aptitude" },
-        { title: "Fitness Gym / Running Routine", category: "Fitness" },
-        { title: "Read 10 Pages of Philosophy", category: "Reading" },
-      ];
-      tasksToCarry = defaults.map((d) => ({
-        userId: userId,
-        title: d.title,
-        category: d.category,
-        completedToday: false,
-      }));
-    }
+    // Scenario 2 & 3: No tasks yesterday or no previous history.
+    // Do not generate or seed any default/placeholder tasks.
+    return [];
   }
 
   // Clone tasks into today
@@ -241,6 +204,7 @@ export function ensureTasksForDay(userId: string, targetDate: string): Task[] {
       category: t.category,
       createdAt: new Date().toISOString().replace(/^[^T]+/, targetDate), // Backdate ISO to targetDate
       completedToday: false,
+      displayOrder: t.displayOrder,
     };
     db.tasks.push(newTask);
     createdTasks.push(newTask);
@@ -555,7 +519,13 @@ export const dbService = {
     const completionsForDate = db.completions.filter((c) => c.userId === userId && c.completionDate === targetDate);
     const completedTaskIds = completionsForDate.map((c) => c.taskId);
 
-    return usersTasks.map((t) => ({
+    const sortedTasks = [...usersTasks].sort((a, b) => {
+      const orderA = a.displayOrder !== undefined ? a.displayOrder : 0;
+      const orderB = b.displayOrder !== undefined ? b.displayOrder : 0;
+      return orderA - orderB;
+    });
+
+    return sortedTasks.map((t) => ({
       ...t,
       completedToday: completedTaskIds.includes(t.id),
     }));
@@ -563,6 +533,12 @@ export const dbService = {
 
   createTask: (userId: string, title: string, category: TaskCategory, targetDate: string = getLocalDateString()): Task => {
     const db = readDB();
+    const todayTasks = db.tasks.filter((t) => t.userId === userId && t.createdAt.startsWith(targetDate));
+    const maxOrder = todayTasks.reduce((max, t) => {
+      const order = t.displayOrder !== undefined ? t.displayOrder : 0;
+      return order > max ? order : max;
+    }, -1);
+
     const newTask: Task = {
       id: "tsk_" + Math.random().toString(36).substring(2, 11),
       userId,
@@ -570,6 +546,7 @@ export const dbService = {
       category,
       createdAt: new Date().toISOString().replace(/^[^T]+/, targetDate), // designation date
       completedToday: false,
+      displayOrder: maxOrder + 1,
     };
 
     db.tasks.push(newTask);
@@ -577,6 +554,33 @@ export const dbService = {
 
     recalculateCoreMetrics(userId);
     return newTask;
+  },
+
+  reorderTasks: (userId: string, taskIds: string[], targetDate: string = getLocalDateString()): Task[] => {
+    const db = readDB();
+    taskIds.forEach((id, index) => {
+      const task = db.tasks.find((t) => t.id === id && t.userId === userId);
+      if (task) {
+        task.displayOrder = index;
+      }
+    });
+    writeDB(db);
+
+    // Fetch and return fresh list sorted
+    const usersTasks = db.tasks.filter((t) => t.userId === userId && t.createdAt.startsWith(targetDate));
+    const completionsForDate = db.completions.filter((c) => c.userId === userId && c.completionDate === targetDate);
+    const completedTaskIds = completionsForDate.map((c) => c.taskId);
+
+    return [...usersTasks]
+      .sort((a, b) => {
+        const orderA = a.displayOrder !== undefined ? a.displayOrder : 0;
+        const orderB = b.displayOrder !== undefined ? b.displayOrder : 0;
+        return orderA - orderB;
+      })
+      .map((t) => ({
+        ...t,
+        completedToday: completedTaskIds.includes(t.id),
+      }));
   },
 
   updateTask: (userId: string, taskId: string, updates: { title?: string; category?: TaskCategory }): Task | null => {

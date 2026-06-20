@@ -27,6 +27,7 @@ export interface Task {
   category: TaskCategory;
   createdAt: string; // ISO String
   completedToday: boolean; // Computed for current local date relative to completion records
+  displayOrder?: number;
 }
 
 export interface TaskCompletion {

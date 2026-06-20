@@ -235,25 +235,7 @@ export default function App() {
       const tasksData = await tasksRes.json();
       if (tasksRes.ok) {
         const rawTasks = tasksData.tasks || [];
-        const customOrder = localStorage.getItem(`ct_order_${userId}`);
-        if (customOrder) {
-          try {
-            const idList = JSON.parse(customOrder) as string[];
-            const sorted = [...rawTasks].sort((a, b) => {
-              const idxA = idList.indexOf(a.id);
-              const idxB = idList.indexOf(b.id);
-              if (idxA === -1 && idxB === -1) return 0;
-              if (idxA === -1) return 1;
-              if (idxB === -1) return -1;
-              return idxA - idxB;
-            });
-            setTasks(sorted);
-          } catch {
-            setTasks(rawTasks);
-          }
-        } else {
-          setTasks(rawTasks);
-        }
+        setTasks(rawTasks);
       }
 
       // 2. Fetch badges lists
@@ -406,11 +388,29 @@ export default function App() {
     if (!user) return;
     setUser({ ...user, ...updates });
   };
-  const handleReorderTasks = (reordered: Task[]) => {
+  const handleReorderTasks = async (reordered: Task[]) => {
     setTasks(reordered);
     const orderIds = reordered.map((t) => t.id);
-    if (user) {
+    if (user && token) {
       localStorage.setItem(`ct_order_${user.id}`, JSON.stringify(orderIds));
+      try {
+        const res = await fetch("/api/tasks/reorder", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ taskIds: orderIds }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.tasks) {
+            setTasks(data.tasks);
+          }
+        }
+      } catch (err) {
+        console.error("Backend reorder sync failed:", err);
+      }
     }
   };
 
@@ -574,8 +574,7 @@ export default function App() {
             </div>
             {!sidebarCollapsed && (
               <div>
-                <h1 className="text-sm font-black tracking-tight leading-none text-[#04D9C4]">Consistency</h1>
-                <span className="text-[9px] text-teal-400 font-extrabold uppercase tracking-widest leading-none block mt-0.5">Tracker</span>
+                <h1 className="text-base font-black tracking-widest leading-none text-[#04D9C4]">CT</h1>
               </div>
             )}
           </div>
@@ -644,10 +643,9 @@ export default function App() {
                 <Menu className="h-5 w-5" />
               </button>
 
-              <div className="hidden sm:block">
-                <p className="text-[10px] font-bold text-blue-500 uppercase tracking-widest leading-none">Welcome back</p>
-                <h2 className={`text-base font-extrabold mt-1 leading-none ${textWhiteClass}`}>
-                  {user.username}
+              <div className="hidden sm:block select-none">
+                <h2 className="text-lg font-black tracking-tight text-[#04D9C4] leading-none">
+                  Consistency Tracker
                 </h2>
               </div>
             </div>
@@ -706,25 +704,30 @@ export default function App() {
             {activeTab === "dashboard" && (
               <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-250">
                 
-                {/* Header Date and Welcome Section (As modeled in screenshot 1) */}
-                <div className="space-y-2 select-none">
+                {/* Header Date and Welcome Section */}
+                <div className="space-y-4 select-none">
                   <p className="text-xs text-slate-400 font-medium tracking-wide">
-                    {new Date().toLocaleDateString("en-US", {
-                      weekday: "long",
-                      day: "numeric",
-                      month: "long",
-                      year: "numeric"
-                    })}
+                    {(() => {
+                      const d = new Date();
+                      const weekday = d.toLocaleDateString("en-US", { weekday: "long" });
+                      const day = d.getDate();
+                      const month = d.toLocaleDateString("en-US", { month: "long" });
+                      const year = d.getFullYear();
+                      return `${weekday}, ${day} ${month} ${year}`;
+                    })()}
                   </p>
-                  <h2 className="text-3xl font-black tracking-tight text-white flex items-center gap-2">
-                    Hello, {user.username} <span className="animate-[pulse_1.5s_infinite]">👋</span>
-                  </h2>
-                  <p className="text-sm text-slate-400 font-medium">
-                    Welcome back. Let's make today count.
-                  </p>
+                  
+                  <div className="space-y-1">
+                    <h2 className="text-3xl font-black tracking-tight text-white flex items-center gap-2">
+                      Hello, {user.username} 👋
+                    </h2>
+                    <p className="text-sm text-slate-400 font-medium">
+                      Welcome back. Let's make today count.
+                    </p>
+                  </div>
                 </div>
 
-                {/* Dashboard Stats Cards Grid Row (6 cards in a responsive row as in image 1) */}
+                {/* Dashboard Stats Cards Grid Row (6 cards in a responsive row) */}
                 {analyticsSummary && (
                   <div className="grid grid-cols-2 lg:grid-cols-6 gap-4 select-none">
                     
@@ -859,7 +862,7 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* 🎯 Active Mission & Latest Achievement row (horizontal cells as in screenshot 1) */}
+                {/* 🎯 Active Mission & Latest Achievement row */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 select-none">
                   
                   {/* Active Mission Card */}
@@ -878,26 +881,16 @@ export default function App() {
                     <div className="h-10 w-10 rounded-full bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400 shrink-0">
                       <Trophy className="h-5 w-5" />
                     </div>
-                    {badges.filter((b) => b.unlockedAt).length === 0 ? (
-                      <div className="space-y-0.5 min-w-0">
-                        <h4 className="text-xs font-black uppercase text-teal-400 tracking-wider">Latest Achievement</h4>
-                        <p className="text-xs text-slate-400 truncate">Complete tasks to unlock your first badge.</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-0.5 min-w-0">
-                        <h4 className="text-xs font-black uppercase text-teal-400 tracking-wider">Latest Achievement</h4>
-                        {badges.filter((b) => b.unlockedAt).slice(-1).map((b) => (
-                          <p key={b.id} className="text-xs font-bold text-white truncate">{b.name} unlocked 🎉</p>
-                        ))}
-                      </div>
-                    )}
+                    <div className="space-y-0.5 min-w-0">
+                      <h4 className="text-xs font-black uppercase text-teal-400 tracking-wider">Latest Achievement</h4>
+                      <p className="text-xs text-slate-400 truncate">
+                        {badges.filter((b) => b.unlockedAt).length === 0 
+                          ? "Complete tasks to unlock your first badge." 
+                          : `${badges.filter((b) => b.unlockedAt).slice(-1)[0]?.name || "First badge"} unlocked 🎉`}
+                      </p>
+                    </div>
                   </div>
 
-                </div>
-
-                {/* Interactive Contributions Map */}
-                <div className="rounded-2xl border border-slate-800 bg-slate-950/20 overflow-hidden">
-                  <Heatmap stats={stats} token={token} />
                 </div>
 
               </div>
@@ -985,7 +978,7 @@ export default function App() {
                 title="Go to Home Landing Page"
               >
                 <ShieldCheck className="h-5 w-5 text-blue-500" />
-                <span className={`text-sm font-bold ${textWhiteClass}`}>Consistency</span>
+                <span className={`text-sm font-black uppercase tracking-wider ${textWhiteClass}`}>CT</span>
               </div>
               <button onClick={() => setMobileMenuOpen(false)} className={`rounded-xl p-1.5 border hover:text-white cursor-pointer ${isDark ? "bg-slate-900 border-slate-800 text-slate-500" : "bg-white border-slate-200 text-slate-700"}`}>
                 <X className="h-4.5 w-4.5" />
