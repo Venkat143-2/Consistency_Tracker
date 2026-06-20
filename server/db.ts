@@ -7,8 +7,35 @@ import * as fs from "fs";
 import * as path from "path";
 import { User, Task, TaskCompletion, DailyStats, Badge, TaskCategory, ExportData } from "../src/types";
 
-const DB_DIR = path.join(process.cwd(), "data");
+const isServerless = typeof process.env.VERCEL !== "undefined" || process.env.NODE_ENV === "production";
+const DB_DIR = isServerless ? "/tmp" : path.join(process.cwd(), "data");
 const DB_FILE = path.join(DB_DIR, "db.json");
+
+// In serverless environments, initialize /tmp/db.json by copying from process.cwd()/data/db.json if it exists
+if (isServerless) {
+  try {
+    if (!fs.existsSync(DB_DIR)) {
+      fs.mkdirSync(DB_DIR, { recursive: true });
+    }
+    if (!fs.existsSync(DB_FILE)) {
+      const originalDbFile = path.join(process.cwd(), "data", "db.json");
+      if (fs.existsSync(originalDbFile)) {
+        fs.writeFileSync(DB_FILE, fs.readFileSync(originalDbFile, "utf8"), "utf8");
+      } else {
+        const fresh: DBLocalSchema = {
+          users: {},
+          tasks: [],
+          completions: [],
+          dailyStats: [],
+          userBadges: {},
+        };
+        fs.writeFileSync(DB_FILE, JSON.stringify(fresh, null, 2), "utf8");
+      }
+    }
+  } catch (err) {
+    console.error("Failed to initialize serverless DB in /tmp:", err);
+  }
+}
 
 interface DBLocalSchema {
   users: Record<string, User & { passwordHash: string }>;
