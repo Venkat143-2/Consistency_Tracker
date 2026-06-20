@@ -162,24 +162,32 @@ export function ProfileSection({ user, badges, onUpdateProfile, consistencyScore
   };
 
   return (
-    <div className="space-y-6 font-sans">
-      {/* Upper Grid: Left User Info & Right mini stats */}
+    <div className="space-y-6 select-none font-sans max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-2 duration-250">
+      
+      {/* Header and Title (Matching Image 5 exactly) */}
+      <div className="space-y-1 pb-2 border-b border-slate-800/60">
+        <h2 className="text-3xl font-black text-white tracking-tight">Profile Settings</h2>
+        <p className="text-sm text-slate-400 font-medium">
+          Control your workspace identities and system preferences.
+        </p>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* User Info Card */}
-        <div className="lg:col-span-1 rounded-2xl border border-slate-800 bg-slate-950/40 p-6 backdrop-blur-md relative overflow-hidden flex flex-col justify-between">
-          <div className="absolute top-0 right-0 h-28 w-28 bg-blue-500/5 rounded-full blur-2xl pointer-events-none" />
+        {/* Left Hand: Identity Info Card (Modeled from Screenshot 5) */}
+        <div className="lg:col-span-1 rounded-xl border border-[#083047] bg-[#041a27] p-6 shadow-2xl relative overflow-hidden flex flex-col justify-between">
+          <div className="absolute top-0 right-0 h-28 w-28 bg-[#04D9C4]/5 rounded-full blur-2xl pointer-events-none" />
           
-          <div className="text-center">
-            {/* Avatar block */}
+          <div className="text-center space-y-4">
+            {/* Avatar block with Camera picker overlay */}
             <div className="relative mx-auto h-24 w-24">
               {renderAvatar()}
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="absolute -bottom-1 -right-1 rounded-lg bg-blue-600 hover:bg-blue-500 p-2 text-white border-2 border-slate-950 transition-all cursor-pointer"
+                className="absolute -bottom-1 -right-1 rounded-lg bg-[#10b981] hover:bg-[#10b981]/90 p-2 text-[#010e17] border-2 border-[#041a27] transition-all cursor-pointer shadow-lg"
                 title="Upload Custom Photo"
               >
-                <Camera className="h-3.5 w-3.5" />
+                <Camera className="h-3.5 w-3.5 stroke-[2.5]" />
               </button>
               <input
                 type="file"
@@ -190,30 +198,31 @@ export function ProfileSection({ user, badges, onUpdateProfile, consistencyScore
               />
             </div>
 
-            <h2 className="mt-4 text-base font-extrabold text-white">{user.username}</h2>
-            <p className="text-xs text-slate-400 mt-1 flex items-center justify-center gap-1.5">
-              <Mail className="h-3.5 w-3.5" />
-              {user.email}
-            </p>
-
-            <div className="mt-4 flex items-center justify-center gap-1.5 text-[10px] text-slate-500 font-medium">
-              <Calendar className="h-3.5 w-3.5" />
-              <span>Joined {new Date(user.createdAt).toLocaleDateString(undefined, { dateStyle: "medium" })}</span>
+            <div>
+              <h2 className="text-lg font-black text-white tracking-tight">{user.username}</h2>
+              <p className="text-xs text-slate-400 mt-1 flex items-center justify-center gap-1.5 font-medium">
+                <Mail className="h-3.5 w-3.5 text-slate-500" />
+                {user.email}
+              </p>
+              <div className="mt-4 inline-flex items-center gap-1.5 text-[10px] text-slate-500 font-bold uppercase tracking-wider bg-[#020e17] px-2.5 py-1 rounded border border-[#083047]">
+                <Calendar className="h-3 w-3 text-[#04D9C4]" />
+                <span>Joined {new Date(user.createdAt).toLocaleDateString(undefined, { dateStyle: "medium" })}</span>
+              </div>
             </div>
           </div>
 
-          {/* Quick Backdrop Presets */}
-          <div className="mt-6 border-t border-slate-900 pt-4 text-left">
-            <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider flex items-center gap-1.5">
-              <Layers className="h-3.5 w-3.5 text-blue-400" /> Choose Abstract Theme
+          {/* Quick Backdrop Theme Presets option */}
+          <div className="mt-6 border-t border-slate-800/80 pt-4 text-left">
+            <span className="text-[10px] uppercase font-black text-slate-500 tracking-wider flex items-center gap-1.5">
+              <Layers className="h-3.5 w-3.5 text-[#04D9C4]" /> Customize Avatar Preset
             </span>
             <div className="mt-2.5 flex flex-wrap gap-2 justify-center">
               {AVATAR_PRESETS.map((grad, i) => (
                 <button
                   key={i}
                   onClick={() => selectPreset(grad)}
-                  className={`h-7 w-7 rounded-md border-2 transition-all hover:scale-105 cursor-pointer ${
-                    user.profilePicture === grad ? "border-white scale-110 shadow-md" : "border-slate-800"
+                  className={`h-7 w-7 rounded-lg border-2 transition-all hover:scale-110 cursor-pointer ${
+                    user.profilePicture === grad ? "border-[#04D9C4] scale-110 shadow-lg" : "border-transparent"
                   }`}
                   style={{ background: grad }}
                   title={`Preset ${i + 1}`}
@@ -223,126 +232,101 @@ export function ProfileSection({ user, badges, onUpdateProfile, consistencyScore
           </div>
         </div>
 
-        {/* Mini Analytics Block */}
-        <div className="lg:col-span-2 rounded-2xl border border-slate-800 bg-slate-950/40 p-6 backdrop-blur-md flex flex-col justify-between">
-          <div>
-            <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2 mb-1">
-              <Activity className="h-4.5 w-4.5 text-blue-500" />
-              Core Identity Metrics
+        {/* Right Hand: Credentials form and analytics highlights */}
+        <div className="lg:col-span-2 space-y-6">
+          
+          {/* Main Credentials Form Card */}
+          <div className="rounded-xl border border-[#083047] bg-[#041a27] p-6 shadow-xl space-y-4">
+            <h3 className="text-xs font-black uppercase text-slate-400 tracking-wider pb-2 border-b border-[#083047]/60 flex items-center gap-1.5">
+              <UserIcon className="h-4 w-4 text-[#04D9C4]" />
+              Account Credentials settings
             </h3>
-            <p className="text-xs text-slate-500">Your overall discipline tracker standings calculated up to present date</p>
+
+            {error && (
+              <div className="rounded-lg bg-rose-500/10 border border-rose-500/20 px-4 py-2 text-xs text-rose-400">
+                {error}
+              </div>
+            )}
+            {msg && (
+              <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-4 py-2 text-xs text-[#10b981]">
+                {msg}
+              </div>
+            )}
+
+            <form onSubmit={handleUpdateInfo} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-505 uppercase tracking-widest">
+                    Username ID
+                  </label>
+                  <input
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    className="w-full rounded-lg border border-[#083047] bg-[#020e17] px-3.5 py-2.5 text-xs text-white focus:border-[#10b981] focus:outline-none placeholder-slate-650"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-505 uppercase tracking-widest">
+                    Email Address Coordinates
+                  </label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full rounded-lg border border-[#083047] bg-[#020e17] px-3.5 py-2.5 text-xs text-white focus:border-[#10b981] focus:outline-none placeholder-slate-650"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="submit"
+                  disabled={updating}
+                  className="rounded-lg bg-[#10b981] hover:bg-[#10b981]/90 px-5 py-2.5 text-xs font-black text-[#010e17] cursor-pointer shadow-lg shadow-[#10b981]/15 disabled:opacity-55 transition-all"
+                >
+                  {updating ? "Saving Coordinates..." : "Apply Updates"}
+                </button>
+              </div>
+            </form>
           </div>
 
-          {/* Mini Statistics Row Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6">
-            <div className="rounded-xl bg-blue-600/5 border border-blue-500/10 p-4 text-center">
-              <span className="text-[10px] uppercase font-bold text-slate-400 block pb-1">Consistency</span>
-              <span className="text-2xl font-black text-blue-400 block">{visualConsistencyScore}%</span>
-            </div>
+          {/* Symmetrical Core Identity Metrics Highlight strip */}
+          <div className="rounded-xl border border-[#083047] bg-[#041a27] p-5 shadow-lg space-y-4">
+            <h3 className="text-xs font-black uppercase text-slate-400 tracking-wider flex items-center gap-1.5">
+              <Activity className="h-4.5 w-4.5 text-[#04D9C4]" />
+              Core Performance indexes
+            </h3>
 
-            <div className="rounded-xl bg-orange-600/5 border border-orange-500/10 p-4 text-center">
-              <span className="text-[10px] uppercase font-bold text-slate-400 block pb-1">Current Streak</span>
-              <span className="text-2xl font-black text-orange-500 flex items-center justify-center gap-1">
-                <Flame className="h-5 w-5 fill-orange-500" />
-                {user.currentStreak}d
-              </span>
-            </div>
-
-            <div className="rounded-xl bg-amber-600/5 border border-amber-500/10 p-4 text-center">
-              <span className="text-[10px] uppercase font-bold text-slate-400 block pb-1">Best Streak</span>
-              <span className="text-2xl font-black text-amber-500 flex items-center justify-center gap-1">
-                <Award className="h-5 w-5" />
-                {user.longestStreak}d
-              </span>
-            </div>
-
-            <div className="rounded-xl bg-emerald-600/5 border border-emerald-500/10 p-4 text-center">
-              <span className="text-[10px] uppercase font-bold text-slate-400 block pb-1">Total Completed</span>
-              <span className="text-2xl font-black text-emerald-400 flex items-center justify-center gap-1">
-                <CheckCircle className="h-5 w-5" />
-                {user.totalTasksCompleted}
-              </span>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="bg-[#020e17] rounded-lg border border-[#083047]/40 p-3 text-center">
+                <span className="text-[9px] uppercase font-black text-slate-500">Consistency</span>
+                <span className="text-lg font-black text-[#04D9C4] block mt-1">{visualConsistencyScore}%</span>
+              </div>
+              <div className="bg-[#020e17] rounded-lg border border-[#083047]/40 p-3 text-center">
+                <span className="text-[9px] uppercase font-black text-slate-500">Current Run</span>
+                <span className="text-lg font-black text-[#10b981] block mt-1 flex items-center justify-center gap-0.5">
+                  <Flame className="h-4 w-4 fill-[#10b981]" /> {user.currentStreak}d
+                </span>
+              </div>
+              <div className="bg-[#020e17] rounded-lg border border-[#083047]/40 p-3 text-center">
+                <span className="text-[9px] uppercase font-black text-slate-500">All-time Max</span>
+                <span className="text-lg font-black text-amber-500 block mt-1 flex items-center justify-center gap-0.5">
+                  <Award className="h-4 w-4" /> {user.longestStreak}d
+                </span>
+              </div>
+              <div className="bg-[#020e17] rounded-lg border border-[#083047]/40 p-3 text-center">
+                <span className="text-[9px] uppercase font-black text-slate-500">Completes</span>
+                <span className="text-lg font-black text-white block mt-1">{user.totalTasksCompleted}</span>
+              </div>
             </div>
           </div>
 
-          {/* Activity Trend bar simulation */}
-          <div className="mt-6 border-t border-slate-900 pt-4">
-            <div className="flex items-center justify-between text-[11px] text-slate-400 mb-2">
-              <span className="font-bold flex items-center gap-1.5 uppercase tracking-wider">
-                <TrendingUp className="h-3.5 w-3.5 text-blue-500" /> Activity Trend Ratio
-              </span>
-              <span className="text-slate-500">Rising Daily Consistency</span>
-            </div>
-            <div className="h-3 w-full bg-slate-900 rounded-full overflow-hidden flex">
-              <div className="h-full bg-blue-500 rounded-l-full" style={{ width: "40%" }} title="DSA/Java Goals" />
-              <div className="h-full bg-emerald-500" style={{ width: "30%" }} title="Communication Skills" />
-              <div className="h-full bg-purple-500" style={{ width: "20%" }} title="Fitness Goals" />
-              <div className="h-full bg-slate-705 rounded-r-full" style={{ width: "10%" }} title="Other Objectives" />
-            </div>
-            <div className="flex justify-between items-center text-[9px] text-slate-500 mt-2">
-              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-blue-500 block" /> Tech</span>
-              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500 block" /> Soft Skills</span>
-              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-purple-500 block" /> Physical</span>
-              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-slate-705 block" /> Reading/Other</span>
-            </div>
-          </div>
         </div>
-      </div>
 
-      {/* Under Grid: Update Credentials */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-6 backdrop-blur-md">
-        <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2 mb-4">
-          <UserIcon className="h-4 w-4 text-blue-500" /> Edit Profile Credentials
-        </h3>
-
-        {error && (
-          <div className="mb-4 rounded-lg bg-rose-500/10 border border-rose-500/20 px-4 py-2 text-xs text-rose-400">
-            {error}
-          </div>
-        )}
-        {msg && (
-          <div className="mb-4 rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-4 py-2 text-xs text-emerald-400">
-            {msg}
-          </div>
-        )}
-
-        <form onSubmit={handleUpdateInfo} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-              Username ID
-            </label>
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="mt-1.5 w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-white focus:border-blue-500 focus:outline-none"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-              Email Address Coordinates
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="mt-1.5 w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-white focus:border-blue-500 focus:outline-none"
-              required
-            />
-          </div>
-
-          <div className="sm:col-span-2 flex justify-end">
-            <button
-              type="submit"
-              disabled={updating}
-              className="rounded-lg bg-blue-600 hover:bg-blue-500 px-4 py-2 text-xs font-semibold text-white cursor-pointer shadow-md shadow-blue-500/10 disabled:opacity-55"
-            >
-              {updating ? "Saving Credentials..." : "Commit Update"}
-            </button>
-          </div>
-        </form>
       </div>
     </div>
   );

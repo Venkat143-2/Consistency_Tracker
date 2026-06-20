@@ -28,120 +28,142 @@ export function MappingSection({ tasks, onToggleTask, loading }: MappingSectionP
   const completedCount = tasks.filter((t) => t.completedToday).length;
   const pendingCount = totalCount - completedCount;
 
+  // Calculated efficiency rate for today
+  const todayPercentage = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+
   return (
-    <div className="space-y-6">
-      {/* Mini Info Card Banner */}
-      <div className="rounded-2xl border border-blue-900/10 bg-gradient-to-r from-blue-900/10 to-indigo-900/10 p-5 flex items-center justify-between gap-4">
-        <div>
-          <h3 className="text-sm font-bold text-white uppercase tracking-wider">
-            Daily Execution Space (Mapping)
-          </h3>
-          <p className="text-xs text-slate-400 mt-1">
-            Focus purely on execution. Mark scheduled actions completed or leave them pending. Actions translate directly into streaks!
+    <div className="space-y-6 select-none font-sans max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-2 duration-200">
+      {/* Header with Title and Dynamic radial tag & indicator (Matching screenshot 3 exactly) */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-slate-800/60">
+        <div className="space-y-1">
+          <h2 className="text-3xl font-black text-white tracking-tight">Mapping</h2>
+          <p className="text-sm text-slate-400 font-medium">
+            Tick what you've done. Consistency updates instantly.
           </p>
         </div>
-        <div className="flex items-center gap-4 text-xs font-semibold shrink-0">
-          <div className="text-right">
-            <span className="text-slate-500 block text-[10px] uppercase">Marked Ratio</span>
-            <span className="text-white text-sm font-extrabold">{completedCount}/{totalCount} Done</span>
-          </div>
+        
+        {/* Today % Indicator card Badge */}
+        <div className="rounded-xl border border-[#083047] bg-[#041a27] px-5 py-3 shadow-lg flex items-center gap-3 self-start sm:self-auto shrink-0 min-w-[120px] justify-between">
+          <span className="text-[10px] uppercase font-black tracking-wider text-slate-500">Today</span>
+          <span className="text-xl font-black text-[#04D9C4] drop-shadow-[0_0_8px_rgba(4,217,196,0.15)]">
+            {todayPercentage}%
+          </span>
         </div>
       </div>
 
-      {/* Grid checklist style of mapping */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-6 backdrop-blur-md">
-        <div className="flex items-center justify-between pb-4 border-b border-slate-800/60 mb-6">
-          <div>
-            <h4 className="text-sm font-bold text-white flex items-center gap-2">
-              <ShieldCheck className="h-4.5 w-4.5 text-blue-500" />
-              Active Daily Goal Mapping
-            </h4>
-            <p className="text-[11px] text-slate-500 mt-0.5">Toggle checkboxes to register progress for today</p>
-          </div>
-          <div className="flex gap-2">
-            <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 text-[10px] font-bold text-emerald-400">
-              ✔️ {completedCount} Completed
-            </div>
-            <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-1 text-[10px] font-bold text-amber-400">
-              ❌ {pendingCount} Pending
-            </div>
-          </div>
+      {loading ? (
+        <div className="py-24 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+          Retrieving goals telemetry...
         </div>
+      ) : tasks.length === 0 ? (
+        /* Empty state (As modeled in screenshot 3) */
+        <div className="rounded-xl border border-dashed border-[#083047] bg-[#041a27]/30 py-20 text-center text-sm text-slate-400">
+          No tasks for today. Add some in Tasks.
+        </div>
+      ) : (
+        /* Symmetrical side-by-side Columns layout (Modeled from screenshot 3) */
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          
+          {/* Column 1: Pending */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800/65">
+              <span className="text-xs font-black uppercase text-slate-400 tracking-wider">
+                Pending • <span className="text-[#04D9C4]">{pendingCount}</span>
+              </span>
+            </div>
 
-        {loading ? (
-          <div className="py-20 text-center text-xs text-slate-400">
-            Fetching active goal definitions...
-          </div>
-        ) : tasks.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-slate-800 py-16 text-center text-xs text-slate-500">
-            No items defined in Tasks section. Go to Tasks Section to create some goals first!
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {tasks.map((t) => {
-              const isChecked = t.completedToday;
-              const catConfig = categoriesList.find((c) => c.value === t.category);
-
-              return (
-                <div
-                  key={t.id}
-                  onClick={() => onToggleTask(t.id)}
-                  className={`flex items-center justify-between rounded-xl border p-4.5 cursor-pointer select-none transition-all duration-150 group hover:scale-[1.01] ${
-                    isChecked
-                      ? "bg-emerald-950/10 border-emerald-500/30 shadow-xs shadow-emerald-500/5 text-slate-400"
-                      : "bg-amber-500/5 border-amber-500/10 hover:border-amber-500/30 text-white"
-                  }`}
-                >
-                  <div className="flex items-center space-x-4 max-w-[80%]">
-                    <div
-                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-all ${
-                        isChecked
-                          ? "bg-emerald-500 border-emerald-500 text-slate-950 hover:bg-emerald-400"
-                          : "border-slate-700 group-hover:border-amber-500 bg-slate-950 text-transparent"
-                      }`}
-                    >
-                      {isChecked ? (
-                        <CheckCircle2 className="h-4 w-4 stroke-[3]" />
-                      ) : (
-                        <Circle className="h-4 w-4 text-slate-500 group-hover:text-amber-500" />
-                      )}
-                    </div>
-
-                    <div>
-                      <p
-                        className={`text-xs font-bold leading-snug transition-all ${
-                          isChecked ? "line-through text-slate-500 font-medium" : "text-white"
-                        }`}
-                      >
-                        {t.title}
-                      </p>
-                      <span
-                        className={`inline-block mt-1 text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-widest ${
-                          catConfig?.color || "text-slate-400 bg-slate-900"
-                        }`}
-                      >
-                        {t.category}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="text-right">
-                    {isChecked ? (
-                      <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider bg-emerald-500/10 px-2 py-0.5 rounded-sm">
-                        COMPLETED ✔️
-                      </span>
-                    ) : (
-                      <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider bg-amber-500/10 px-2 py-0.5 rounded-sm">
-                        PENDING ❌
-                      </span>
-                    )}
-                  </div>
+            <div className="space-y-2.5">
+              {pendingCount === 0 ? (
+                <div className="rounded-xl border border-dashed border-[#083047] bg-[#041a27]/10 py-10 text-center text-xs text-slate-500">
+                  Nothing here.
                 </div>
-              );
-            })}
+              ) : (
+                tasks
+                  .filter((t) => !t.completedToday)
+                  .map((t) => {
+                    const catConfig = categoriesList.find((c) => c.value === t.category);
+                    return (
+                      <div
+                        key={t.id}
+                        onClick={() => onToggleTask(t.id)}
+                        className="flex items-center justify-between rounded-xl border border-[#083047] bg-[#041a27] p-4.5 cursor-pointer hover:border-[#10b981]/20 transition-all duration-150 group active:scale-[0.99]"
+                      >
+                        <div className="flex items-center space-x-3.5 max-w-[85%]">
+                          <div className="h-5 w-5 rounded border border-slate-700 flex items-center justify-center text-transparent group-hover:border-[#10b981] group-hover:text-[#10b981]/40 shrink-0">
+                            <Circle className="h-3.5 w-3.5" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-slate-100 truncate">{t.title}</p>
+                            <span
+                              className={`inline-block mt-1 text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-widest ${
+                                catConfig?.color || "text-slate-400 bg-slate-900"
+                              }`}
+                            >
+                              {t.category}
+                            </span>
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-bold text-slate-450 bg-[#020e17] px-2 py-0.5 rounded border border-[#083047] shrink-0">
+                          PENDING
+                        </span>
+                      </div>
+                    );
+                  })
+              )}
+            </div>
           </div>
-        )}
-      </div>
+
+          {/* Column 2: Completed */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800/65">
+              <span className="text-xs font-black uppercase text-slate-400 tracking-wider">
+                Completed • <span className="text-[#10b981]">{completedCount}</span>
+              </span>
+            </div>
+
+            <div className="space-y-2.5">
+              {completedCount === 0 ? (
+                <div className="rounded-xl border border-dashed border-[#083047] bg-[#041a27]/10 py-10 text-center text-xs text-slate-500">
+                  Nothing here.
+                </div>
+              ) : (
+                tasks
+                  .filter((t) => t.completedToday)
+                  .map((t) => {
+                    const catConfig = categoriesList.find((c) => c.value === t.category);
+                    return (
+                      <div
+                        key={t.id}
+                        onClick={() => onToggleTask(t.id)}
+                        className="flex items-center justify-between rounded-xl border border-[#10b981]/15 bg-emerald-950/10 p-4.5 cursor-pointer hover:border-emerald-500/25 transition-all duration-150 group active:scale-[0.99]"
+                      >
+                        <div className="flex items-center space-x-3.5 max-w-[85%]">
+                          <div className="h-5 w-5 rounded bg-[#10b981] border border-[#10b981] flex items-center justify-center text-[#010e17] shrink-0">
+                            <CheckCircle2 className="h-3.5 w-3.5 stroke-[3]" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold line-through text-slate-500 truncate">{t.title}</p>
+                            <span
+                              className={`inline-block mt-1 text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-widest ${
+                                catConfig?.color || "text-slate-400 bg-slate-900"
+                              }`}
+                            >
+                              {t.category}
+                            </span>
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-bold text-emerald-400 bg-[#020e17] px-2 py-0.5 rounded border border-[#10b981]/15 shrink-0">
+                          DONE
+                        </span>
+                      </div>
+                    );
+                  })
+              )}
+            </div>
+          </div>
+
+        </div>
+      )}
     </div>
   );
 }

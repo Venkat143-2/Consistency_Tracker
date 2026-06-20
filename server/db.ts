@@ -71,9 +71,16 @@ export const ALL_BADGES: { id: string; name: string; description: string; iconNa
 ];
 
 // Helper to format LocalDate as "YYYY-MM-DD"
-export function getLocalDateString(dateObj: Date = new Date()): string {
-  const offset = dateObj.getTimezoneOffset();
-  const adjusted = new Date(dateObj.getTime() - offset * 60 * 1000);
+export function getLocalDateString(dateObj: any = new Date()): string {
+  let parsed = dateObj;
+  if (!(parsed instanceof Date) || isNaN(parsed.getTime())) {
+    parsed = new Date(dateObj);
+  }
+  if (isNaN(parsed.getTime())) {
+    parsed = new Date();
+  }
+  const offset = parsed.getTimezoneOffset();
+  const adjusted = new Date(parsed.getTime() - offset * 60 * 1000);
   return adjusted.toISOString().split("T")[0];
 }
 

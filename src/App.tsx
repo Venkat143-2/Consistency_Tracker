@@ -30,6 +30,7 @@ import {
   RefreshCcw,
   ShieldCheck,
   CheckCircle2,
+  Circle,
   Calendar,
   Sparkles,
   Compass,
@@ -39,6 +40,23 @@ import {
   ChevronRight,
   Map
 } from "lucide-react";
+
+// Robust retry wrapper to completely avoid transient "Failed to fetch" errors
+const fetchWithRetry = async (url: string, options?: RequestInit, retries = 5, delay = 800): Promise<Response> => {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const response = await fetch(url, options);
+      return response;
+    } catch (err: any) {
+      if (i === retries - 1) {
+        throw err;
+      }
+      console.warn(`Fetch to ${url} failed, retrying in ${delay}ms... (Attempt ${i + 1}/${retries})`, err);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+  throw new Error(`Fetch to ${url} failed after ${retries} attempts.`);
+};
 
 export default function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem("ct_token"));
@@ -92,10 +110,17 @@ export default function App() {
     let mounted = true;
     const fetchSession = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        let session = null;
+        try {
+          const { data } = await supabase.auth.getSession();
+          session = data?.session;
+        } catch (supabaseErr) {
+          console.warn("Supabase getSession failed, falling back to local session:", supabaseErr);
+        }
+
         if (session?.user) {
           const usernameVal = session.user.user_metadata?.username || session.user.email?.split("@")[0] || "User";
-          const res = await fetch("/api/auth/sync", {
+          const res = await fetchWithRetry("/api/auth/sync", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ id: session.user.id, email: session.user.email, username: usernameVal }),
@@ -112,6 +137,30 @@ export default function App() {
             localStorage.removeItem("ct_token");
           }
         } else {
+          // Local fallback using ct_token from localStorage
+          const localToken = localStorage.getItem("ct_token");
+          if (localToken) {
+            try {
+              const res = await fetchWithRetry("/api/auth/me", {
+                headers: { Authorization: `Bearer ${localToken}` },
+              });
+              if (res.ok) {
+                const data = await res.json();
+                if (data.user && mounted) {
+                  setUser(data.user);
+                  setToken(localToken);
+                  await syncTrackerData(data.user.id, localToken);
+                  if (mounted) {
+                    setSessionLoading(false);
+                  }
+                  return;
+                }
+              }
+            } catch (err) {
+              console.error("Local session token validation failed:", err);
+            }
+          }
+
           if (mounted) {
             setToken(null);
             setUser(null);
@@ -119,7 +168,7 @@ export default function App() {
           }
         }
       } catch (err) {
-        console.error("Supabase session verification failed:", err);
+        console.error("Session verification failed:", err);
       } finally {
         if (mounted) {
           setSessionLoading(false);
@@ -129,32 +178,49 @@ export default function App() {
     fetchSession();
 
     // Setup an auth trace callback to keep systems fully synced reactive
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!mounted) return;
-      if (session?.user) {
-        const usernameVal = session.user.user_metadata?.username || session.user.email?.split("@")[0] || "User";
-        const res = await fetch("/api/auth/sync", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: session.user.id, email: session.user.email, username: usernameVal }),
-        });
-        const data = await res.json();
-        if (res.ok && data.user) {
-          setUser(data.user);
-          setToken(data.token);
-          localStorage.setItem("ct_token", data.token);
-          await syncTrackerData(data.user.id, data.token);
+    let subscription: any = null;
+    try {
+      const authListener = supabase.auth.onAuthStateChange(async (event, session) => {
+        if (!mounted) return;
+        if (session?.user) {
+          const usernameVal = session.user.user_metadata?.username || session.user.email?.split("@")[0] || "User";
+          try {
+            const res = await fetchWithRetry("/api/auth/sync", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id: session.user.id, email: session.user.email, username: usernameVal }),
+            });
+            const data = await res.json();
+            if (res.ok && data.user) {
+              setUser(data.user);
+              setToken(data.token);
+              localStorage.setItem("ct_token", data.token);
+              await syncTrackerData(data.user.id, data.token);
+            }
+          } catch (syncErr) {
+            console.error("Error syncing active Supabase session with local backend:", syncErr);
+          }
+        } else {
+          // Only clear if we aren't currently authenticating locally
+          // (mock local logins won't trigger a Supabase session)
+          const localToken = localStorage.getItem("ct_token");
+          if (!localToken) {
+            setUser(null);
+            setToken(null);
+            localStorage.removeItem("ct_token");
+          }
         }
-      } else {
-        setUser(null);
-        setToken(null);
-        localStorage.removeItem("ct_token");
-      }
-    });
+      });
+      subscription = authListener?.data?.subscription;
+    } catch (authChangeErr) {
+      console.warn("Supabase onAuthStateChange failed:", authChangeErr);
+    }
 
     return () => {
       mounted = false;
-      subscription.unsubscribe();
+      if (subscription) {
+        subscription.unsubscribe();
+      }
     };
   }, []);
 
@@ -163,7 +229,7 @@ export default function App() {
     setDataSyncing(true);
     try {
       // 1. Fetch tasks for today
-      const tasksRes = await fetch("/api/tasks", {
+      const tasksRes = await fetchWithRetry("/api/tasks", {
         headers: { Authorization: `Bearer ${activeToken}` },
       });
       const tasksData = await tasksRes.json();
@@ -191,7 +257,7 @@ export default function App() {
       }
 
       // 2. Fetch badges lists
-      const badgesRes = await fetch("/api/badges", {
+      const badgesRes = await fetchWithRetry("/api/badges", {
         headers: { Authorization: `Bearer ${activeToken}` },
       });
       const badgesData = await badgesRes.json();
@@ -200,7 +266,7 @@ export default function App() {
       }
 
       // 3. Fetch analytics
-      const analyticsRes = await fetch("/api/analytics", {
+      const analyticsRes = await fetchWithRetry("/api/analytics", {
         headers: { Authorization: `Bearer ${activeToken}` },
       });
       const analyticsData = await analyticsRes.json();
@@ -440,22 +506,25 @@ export default function App() {
   }
 
   // Set colors based on chosen theme: Consistent with UI design guidelines
-  // Dark Theme: Background #0F172A, Cards #1E293B, Primary #3B82F6.
-  // Light Theme: Background #F8FAFC, Cards #FFFFFF, Primary #2563EB.
+  // Dark Theme: Deep Teal-Black #010e17, Cards #041a27, Accent Emerald #10b981.
   const isDark = user.theme === "dark";
-  const bgClass = isDark ? "bg-[#0F172A] text-slate-100" : "bg-[#F8FAFC] text-slate-800";
-  const cardClass = isDark ? "bg-[#1E293B] border-slate-800" : "bg-white border-slate-200";
-  const navbarClass = isDark ? "bg-[#1E293B]/60 border-slate-800/80" : "bg-white/60 border-slate-200/80";
+  const bgClass = isDark ? "bg-[#010e17] text-slate-100" : "bg-[#F8FAFC] text-slate-800";
+  const cardClass = isDark ? "bg-[#042130] border-[#083047] hover:border-[#10b981]/30 hover:shadow-[0_0_20px_rgba(16,185,129,0.03)]" : "bg-white border-slate-200 hover:border-blue-500/10";
+  const navbarClass = isDark ? "bg-[#010e17]/85 border-[#042130]/80" : "bg-white/80 border-slate-200/80";
   const textWhiteClass = isDark ? "text-white" : "text-slate-900";
   const textMutedClass = isDark ? "text-slate-400" : "text-slate-500";
-  const hoverActiveMenuClass = isDark ? "hover:bg-slate-800 text-white" : "hover:bg-slate-100 text-slate-900";
+  const hoverActiveMenuClass = isDark ? "hover:bg-[#052b3e] text-white" : "hover:bg-slate-100 text-slate-900";
 
   return (
     <div className={`min-h-screen flex flex-col font-sans transition-colors duration-200 select-none ${bgClass}`}>
       
       {/* Decorative Orbs inside background */}
-      <div className="absolute top-0 right-0 -z-10 h-96 w-96 rounded-full bg-blue-500/5 blur-[150px]" />
-      <div className="absolute bottom-1/4 left-10 -z-10 h-96 w-96 rounded-full bg-emerald-500/5 blur-[150px]" />
+      {isDark && (
+        <>
+          <div className="absolute top-0 right-0 -z-10 h-96 w-96 rounded-full bg-emerald-500/5 blur-[150px]" />
+          <div className="absolute bottom-1/4 left-10 -z-10 h-96 w-96 rounded-full bg-teal-500/5 blur-[150px]" />
+        </>
+      )}
 
       {/* Floating Micro toast alerts */}
       <div className="fixed top-5 right-5 z-50 flex flex-col gap-2.5 max-w-sm">
@@ -469,7 +538,7 @@ export default function App() {
                 : "bg-slate-950/90 border-slate-800 text-slate-200"
             }`}
           >
-            {a.type === "success" ? <Sparkles className="h-5 w-5 shrink-0" /> : <ShieldCheck className="h-5 w-5 text-blue-500 shrink-0" />}
+            {a.type === "success" ? <Sparkles className="h-5 w-5 shrink-0" /> : <ShieldCheck className="h-5 w-5 text-teal-400 shrink-0" />}
             <div>
               <p className="text-xs font-bold leading-tight">{a.text}</p>
               <p className="text-[10px] opacity-60 mt-0.5">Click to dismiss card</p>
@@ -488,7 +557,7 @@ export default function App() {
           <button
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
             className={`absolute -right-3 top-16 z-20 h-6 w-6 rounded-full border flex items-center justify-center transition-all ${
-              isDark ? "bg-slate-900 border-slate-800 text-slate-400 hover:text-white" : "bg-white border-slate-200 text-slate-700 hover:text-slate-950"
+              isDark ? "bg-[#010e17] border-[#083047] text-slate-400 hover:text-white" : "bg-white border-slate-200 text-slate-700 hover:text-slate-950"
             }`}
           >
             {sidebarCollapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronLeft className="h-3 w-3" />}
@@ -500,13 +569,13 @@ export default function App() {
             className="flex items-center space-x-3 mb-8 cursor-pointer hover:opacity-80 transition-opacity justify-center md:justify-start"
             title="Go to Home Landing Page"
           >
-            <div className="rounded-xl bg-blue-600/10 border border-blue-500/20 p-2 text-blue-500 shrink-0">
+            <div className="rounded-xl bg-teal-500/10 border border-teal-500/20 p-2 text-[#04D9C4] shrink-0">
               <ShieldCheck className="h-6 w-6 stroke-[2.5]" />
             </div>
             {!sidebarCollapsed && (
               <div>
-                <h1 className={`text-sm font-black tracking-tight leading-none ${textWhiteClass}`}>Consistency</h1>
-                <span className="text-[9px] text-blue-500 font-extrabold uppercase tracking-widest leading-none block mt-0.5">Tracker</span>
+                <h1 className="text-sm font-black tracking-tight leading-none text-[#04D9C4]">Consistency</h1>
+                <span className="text-[9px] text-teal-400 font-extrabold uppercase tracking-widest leading-none block mt-0.5">Tracker</span>
               </div>
             )}
           </div>
@@ -534,7 +603,7 @@ export default function App() {
                     sidebarCollapsed ? "justify-center p-3" : "space-x-3.5 px-4 py-3"
                   } ${
                     isActive
-                      ? "bg-blue-600 text-white shadow-md shadow-blue-600/10"
+                      ? "bg-[#10b981] text-[#010e17] shadow-md shadow-[#10b981]/20"
                       : `${textMutedClass} ${hoverActiveMenuClass}`
                   }`}
                 >
@@ -546,7 +615,7 @@ export default function App() {
           </nav>
 
           {/* Logout segment */}
-          <div className="mt-auto border-t border-slate-900/60 pt-4">
+          <div className="mt-auto border-t border-slate-800/40 pt-4">
             <button
               onClick={handleLogout}
               className={`w-full flex items-center rounded-xl text-xs font-bold text-rose-500 hover:bg-rose-950/20 cursor-pointer transition-all ${
@@ -632,187 +701,198 @@ export default function App() {
 
 
           {/* --- VIEW ROUTER AND PAGE MARGIN --- */}
-          <main className="flex-1 p-6 overflow-y-auto max-w-7xl w-full mx-auto space-y-6">
+          <main className="flex-1 p-6 overflow-y-auto max-w-7xl w-full mx-auto space-y-8">
             
             {activeTab === "dashboard" && (
-              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-200">
+              <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-250">
                 
-                {/* Header Date details row */}
-                <div className="flex items-center justify-between pb-3 border-b border-slate-900/40 select-none">
-                  <div>
-                    <h3 className={`text-base font-extrabold flex items-center gap-2 ${textWhiteClass}`}>
-                      Consistency Tracker
-                    </h3>
-                    <p className="text-xs text-slate-400 mt-1 flex items-center gap-1.5">
-                      <Calendar className="h-3.5 w-3.5 text-blue-500" />
-                      {new Date().toLocaleDateString("en-US", {
-                        weekday: "long",
-                        day: "numeric",
-                        month: "long",
-                        year: "numeric"
-                      })}
-                    </p>
-                  </div>
+                {/* Header Date and Welcome Section (As modeled in screenshot 1) */}
+                <div className="space-y-2 select-none">
+                  <p className="text-xs text-slate-400 font-medium tracking-wide">
+                    {new Date().toLocaleDateString("en-US", {
+                      weekday: "long",
+                      day: "numeric",
+                      month: "long",
+                      year: "numeric"
+                    })}
+                  </p>
+                  <h2 className="text-3xl font-black tracking-tight text-white flex items-center gap-2">
+                    Hello, {user.username} <span className="animate-[pulse_1.5s_infinite]">👋</span>
+                  </h2>
+                  <p className="text-sm text-slate-400 font-medium">
+                    Welcome back. Let's make today count.
+                  </p>
                 </div>
 
-                {/* Micro Welcome Hero Banner */}
-                <div className="relative rounded-2xl border border-blue-900/15 bg-gradient-to-r from-blue-900/10 to-indigo-900/10 p-6 flex flex-col sm:flex-row items-center justify-between gap-4 overflow-hidden backdrop-blur-md">
-                  <div className="space-y-1">
-                    <span className="rounded-full bg-blue-600/10 border border-blue-500/10 px-2.5 py-1 text-[10px] font-bold text-blue-400 uppercase tracking-widest">
-                      Commitment Progress Live
-                    </span>
-                    <h3 className={`text-lg font-bold ${textWhiteClass}`}>
-                      Hello, {user.username} 👋
-                    </h3>
-                    <p className="text-xs text-slate-400 leading-relaxed max-w-sm">
-                      Welcome back. Let’s make today count. Maintain disciplines, master your career path.
-                    </p>
-                  </div>
-
-                  {dataSyncing && (
-                    <div className="flex items-center gap-2 text-xs text-blue-400 font-bold bg-blue-500/5 border border-blue-500/10 rounded-full px-3 py-1">
-                      <RefreshCcw className="h-3.5 w-3.5 animate-spin" />
-                      <span>Syncing statistics...</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Dashboard Stats Cards Grid Row */}
+                {/* Dashboard Stats Cards Grid Row (6 cards in a responsive row as in image 1) */}
                 {analyticsSummary && (
-                  <div className="grid grid-cols-2 gap-4 sm:grid-cols-6 select-none">
-                    <div className={`rounded-xl border p-4.5 ${cardClass}`}>
-                      <div className="text-[10px] uppercase font-bold text-slate-500">Total Tasks</div>
-                      <div className={`mt-1.5 text-2xl font-black ${textWhiteClass}`}>
-                        {tasks.length}
+                  <div className="grid grid-cols-2 lg:grid-cols-6 gap-4 select-none">
+                    
+                    {/* Total Tasks */}
+                    <div className={`rounded-xl border p-4.5 flex items-center justify-between shadow-lg transition-all duration-300 ${cardClass}`}>
+                      <div className="space-y-1">
+                        <div className="text-[10px] uppercase font-black tracking-wider text-slate-500">Total Tasks</div>
+                        <div className="text-2xl font-black text-white">{tasks.length}</div>
+                      </div>
+                      <div className="p-2 rounded-lg bg-teal-500/10 border border-teal-500/20 text-teal-400 shrink-0">
+                        <LayoutGrid className="h-4.5 w-4.5 stroke-[2.5]" />
                       </div>
                     </div>
-                    <div className={`rounded-xl border p-4.5 ${cardClass}`}>
-                      <div className="text-[10px] uppercase font-bold text-slate-500">Completed</div>
-                      <div className="mt-1.5 text-2xl font-black text-emerald-450">
-                        {tasks.filter((t) => t.completedToday).length}
+
+                    {/* Completed */}
+                    <div className={`rounded-xl border p-4.5 flex items-center justify-between shadow-lg transition-all duration-300 ${cardClass}`}>
+                      <div className="space-y-1">
+                        <div className="text-[10px] uppercase font-black tracking-wider text-slate-500">Completed</div>
+                        <div className="text-2xl font-black text-white">{tasks.filter((t) => t.completedToday).length}</div>
+                      </div>
+                      <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-[#10b981] shrink-0">
+                        <CheckCircle2 className="h-4.5 w-4.5 stroke-[2.5]" />
                       </div>
                     </div>
-                    <div className={`rounded-xl border p-4.5 ${cardClass}`}>
-                      <div className="text-[10px] uppercase font-bold text-slate-500">Pending</div>
-                      <div className="mt-1.5 text-2xl font-black text-amber-500">
-                        {tasks.filter((t) => !t.completedToday).length}
+
+                    {/* Pending */}
+                    <div className={`rounded-xl border p-4.5 flex items-center justify-between shadow-lg transition-all duration-300 ${cardClass}`}>
+                      <div className="space-y-1">
+                        <div className="text-[10px] uppercase font-black tracking-wider text-slate-500">Pending</div>
+                        <div className="text-2xl font-black text-white">{tasks.filter((t) => !t.completedToday).length}</div>
+                      </div>
+                      <div className="p-2 rounded-lg bg-teal-500/10 border border-teal-500/20 text-teal-400 shrink-0">
+                        <Circle className="h-4.5 w-4.5 stroke-[2.5]" />
                       </div>
                     </div>
-                    <div className={`rounded-xl border p-4.5 ${cardClass}`}>
-                      <div className="text-[10px] uppercase font-bold text-slate-500">Daily %</div>
-                      <div className="mt-1.5 text-2xl font-black text-blue-500">
-                        {tasks.length > 0 ? Math.round((tasks.filter((t) => t.completedToday).length / tasks.length) * 100) : 0}%
+
+                    {/* Daily % */}
+                    <div className={`rounded-xl border p-4.5 flex items-center justify-between shadow-lg transition-all duration-300 ${cardClass}`}>
+                      <div className="space-y-1">
+                        <div className="text-[10px] uppercase font-black tracking-wider text-slate-500">Daily</div>
+                        <div className="text-2xl font-extrabold text-[#04D9C4] drop-shadow-[0_0_8px_rgba(4,217,196,0.15)]">
+                          {tasks.length > 0 ? Math.round((tasks.filter((t) => t.completedToday).length / tasks.length) * 100) : 0}%
+                        </div>
+                      </div>
+                      <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shrink-0">
+                        <Flame className="h-4.5 w-4.5 fill-emerald-500/20" />
                       </div>
                     </div>
-                    <div className={`rounded-xl border p-4.5 ${cardClass}`}>
-                      <div className="text-[10px] uppercase font-bold text-slate-500">Monthly %</div>
-                      <div className="mt-1.5 text-2xl font-black text-purple-400">
-                        {stats.slice(-30).length > 0 ? Math.round(stats.slice(-30).reduce((sum, s) => sum + s.completionPercentage, 0) / stats.slice(-30).length) : 0}%
+
+                    {/* Monthly % */}
+                    <div className={`rounded-xl border p-4.5 flex items-center justify-between shadow-lg transition-all duration-300 ${cardClass}`}>
+                      <div className="space-y-1">
+                        <div className="text-[10px] uppercase font-black tracking-wider text-slate-500">Monthly</div>
+                        <div className="text-2xl font-extrabold text-[#04D9C4]">
+                          {stats.slice(-30).length > 0 ? Math.round(stats.slice(-30).reduce((sum, s) => sum + s.completionPercentage, 0) / stats.slice(-30).length) : 0}%
+                        </div>
+                      </div>
+                      <div className="p-2 rounded-lg bg-teal-500/10 border border-teal-500/20 text-teal-400 shrink-0">
+                        <Calendar className="h-4.5 w-4.5" />
                       </div>
                     </div>
-                    <div className={`rounded-xl border p-4.5 ${cardClass}`}>
-                      <div className="text-[10px] uppercase font-bold text-slate-500">Yearly %</div>
-                      <div className="mt-1.5 text-2xl font-black text-teal-400">
-                        {analyticsSummary.consistencyScore}%
+
+                    {/* Yearly % */}
+                    <div className={`rounded-xl border p-4.5 flex items-center justify-between shadow-lg transition-all duration-300 ${cardClass}`}>
+                      <div className="space-y-1">
+                        <div className="text-[10px] uppercase font-black tracking-wider text-slate-500">Yearly</div>
+                        <div className="text-2xl font-extrabold text-[#04D9C4]">
+                          {analyticsSummary.consistencyScore}%
+                        </div>
+                      </div>
+                      <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shrink-0">
+                        <BarChart3 className="h-4.5 w-4.5" />
                       </div>
                     </div>
+
                   </div>
                 )}
 
                 {/* ⚡ Quick Navigation Cards */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 select-none">
-                  <div
-                    onClick={() => setActiveTab("tasks")}
-                    className={`rounded-xl border p-4 cursor-pointer transition-all hover:bg-blue-600/5 hover:border-blue-500/20 active:scale-[0.985] ${cardClass}`}
-                  >
-                    <CheckSquare className="h-5 w-5 text-blue-500 mb-2" />
-                    <h5 className={`text-xs font-bold ${textWhiteClass}`}>Plan today's tasks</h5>
-                    <p className="text-[10px] text-slate-500 mt-1">Tasks Page</p>
-                  </div>
-                  <div
-                    onClick={() => setActiveTab("mapping")}
-                    className={`rounded-xl border p-4 cursor-pointer transition-all hover:bg-blue-600/5 hover:border-blue-500/20 active:scale-[0.985] ${cardClass}`}
-                  >
-                    <Map className="h-5 w-5 text-teal-500 mb-2" />
-                    <h5 className={`text-xs font-bold ${textWhiteClass}`}>Mark them complete</h5>
-                    <p className="text-[10px] text-slate-500 mt-1">Mapping Page</p>
-                  </div>
-                  <div
-                    onClick={() => setActiveTab("analytics")}
-                    className={`rounded-xl border p-4 cursor-pointer transition-all hover:bg-blue-600/5 hover:border-blue-500/20 active:scale-[0.985] ${cardClass}`}
-                  >
-                    <BarChart3 className="h-5 w-5 text-purple-500 mb-2" />
-                    <h5 className={`text-xs font-bold ${textWhiteClass}`}>See your trends</h5>
-                    <p className="text-[10px] text-slate-500 mt-1">Analytics Page</p>
-                  </div>
-                  <div
-                    onClick={() => setActiveTab("profile")}
-                    className={`rounded-xl border p-4 cursor-pointer transition-all hover:bg-blue-600/5 hover:border-blue-500/20 active:scale-[0.985] ${cardClass}`}
-                  >
-                    <UserIcon className="h-5 w-5 text-indigo-500 mb-2" />
-                    <h5 className={`text-xs font-bold ${textWhiteClass}`}>Account & overall</h5>
-                    <p className="text-[10px] text-slate-500 mt-1">Profile Page</p>
+                <div className="space-y-3.5 select-none text-left">
+                  <h3 className="text-sm font-black text-white tracking-wider uppercase">Quick navigation</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    
+                    {/* Tasks */}
+                    <div
+                      onClick={() => setActiveTab("tasks")}
+                      className={`rounded-xl border p-5 cursor-pointer ease-out transition-all duration-200 active:scale-[0.985] flex flex-col justify-between aspect-video ${cardClass}`}
+                    >
+                      <CheckSquare className="h-5 w-5 text-teal-400 mb-3 stroke-[2.5]" />
+                      <div>
+                        <h5 className="text-sm font-extrabold text-white">Tasks</h5>
+                        <p className="text-[11px] text-slate-400 mt-1">Plan today's tasks</p>
+                      </div>
+                    </div>
+
+                    {/* Mapping */}
+                    <div
+                      onClick={() => setActiveTab("mapping")}
+                      className={`rounded-xl border p-5 cursor-pointer ease-out transition-all duration-200 active:scale-[0.985] flex flex-col justify-between aspect-video ${cardClass}`}
+                    >
+                      <CheckCircle2 className="h-5 w-5 text-emerald-400 mb-3 stroke-[2.5]" />
+                      <div>
+                        <h5 className="text-sm font-extrabold text-white">Mapping</h5>
+                        <p className="text-[11px] text-slate-400 mt-1">Mark them complete</p>
+                      </div>
+                    </div>
+
+                    {/* Analytics */}
+                    <div
+                      onClick={() => setActiveTab("analytics")}
+                      className={`rounded-xl border p-5 cursor-pointer ease-out transition-all duration-200 active:scale-[0.985] flex flex-col justify-between aspect-video ${cardClass}`}
+                    >
+                      <BarChart3 className="h-5 w-5 text-teal-400 mb-3 stroke-[2.5]" />
+                      <div>
+                        <h5 className="text-sm font-extrabold text-white">Analytics</h5>
+                        <p className="text-[11px] text-slate-400 mt-1 font-medium">See your trends</p>
+                      </div>
+                    </div>
+
+                    {/* Profile */}
+                    <div
+                      onClick={() => setActiveTab("profile")}
+                      className={`rounded-xl border p-5 cursor-pointer ease-out transition-all duration-200 active:scale-[0.985] flex flex-col justify-between aspect-video ${cardClass}`}
+                    >
+                      <UserIcon className="h-5 w-5 text-emerald-400 mb-3 stroke-[2.5]" />
+                      <div>
+                        <h5 className="text-sm font-extrabold text-white">Profile</h5>
+                        <p className="text-[11px] text-slate-400 mt-1">Account & overall</p>
+                      </div>
+                    </div>
+
                   </div>
                 </div>
 
-                {/* 🎯 Active Mission Panel & Latest Achievement Panels split row */}
+                {/* 🎯 Active Mission & Latest Achievement row (horizontal cells as in screenshot 1) */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 select-none">
-                  {/* Active Mission Panel (Celebration empty state UI) */}
-                  <div className={`rounded-xl border p-5 ${cardClass} flex flex-col justify-between min-h-[180px]`}>
-                    <div className="flex items-center justify-between border-b border-slate-905 pb-3">
-                      <span className="text-xs font-black uppercase text-slate-300 tracking-wider">
-                        🎯 Active Mission Panel
-                      </span>
-                      <button
-                        onClick={() => setActiveTab("missions")}
-                        className="text-[10px] font-bold text-blue-500 hover:underline"
-                      >
-                        All Missions
-                      </button>
+                  
+                  {/* Active Mission Card */}
+                  <div className={`rounded-xl border p-5 flex items-center gap-4.5 transition-all duration-300 ${cardClass}`}>
+                    <div className="h-10 w-10 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                      <Target className="h-5 w-5 animate-pulse" />
                     </div>
-                    <div className="py-6 text-center space-y-2">
-                      <div className="mx-auto h-8 w-8 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
-                        <Compass className="h-4 w-4 animate-spin" style={{ animationDuration: "12s" }} />
-                      </div>
-                      <h4 className="text-xs font-extrabold text-slate-200">All missions complete — legendary work.</h4>
-                      <p className="text-[10px] text-slate-500">Every active streak milestone satisfies fully. Keep completing tasks daily!</p>
+                    <div className="space-y-0.5 min-w-0">
+                      <h4 className="text-xs font-black uppercase text-emerald-400 tracking-wider">Active Mission</h4>
+                      <p className="text-xs font-bold text-white truncate">All missions complete — legendary work.</p>
                     </div>
                   </div>
 
-                  {/* Latest Achievement Panel */}
-                  <div className={`rounded-xl border p-5 ${cardClass} flex flex-col justify-between min-h-[180px]`}>
-                    <div className="flex items-center justify-between border-b border-slate-905 pb-3">
-                      <span className="text-xs font-black uppercase text-slate-300 tracking-wider">
-                        🏆 Latest Achievement Panel
-                      </span>
-                      <button
-                        onClick={() => setActiveTab("achievements")}
-                        className="text-[10px] font-bold text-blue-500 hover:underline"
-                      >
-                        Hall of Achievements
-                      </button>
+                  {/* Latest Achievement Card */}
+                  <div className={`rounded-xl border p-5 flex items-center gap-4.5 transition-all duration-300 ${cardClass}`}>
+                    <div className="h-10 w-10 rounded-full bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400 shrink-0">
+                      <Trophy className="h-5 w-5" />
                     </div>
                     {badges.filter((b) => b.unlockedAt).length === 0 ? (
-                      <div className="py-6 text-center space-y-2 text-slate-500 text-[10px]">
-                        <Trophy className="h-6 w-6 text-slate-650 mx-auto" />
-                        <p>Complete tasks to unlock your first badge.</p>
+                      <div className="space-y-0.5 min-w-0">
+                        <h4 className="text-xs font-black uppercase text-teal-400 tracking-wider">Latest Achievement</h4>
+                        <p className="text-xs text-slate-400 truncate">Complete tasks to unlock your first badge.</p>
                       </div>
                     ) : (
-                      <div className="space-y-3.5 py-2">
+                      <div className="space-y-0.5 min-w-0">
+                        <h4 className="text-xs font-black uppercase text-teal-400 tracking-wider">Latest Achievement</h4>
                         {badges.filter((b) => b.unlockedAt).slice(-1).map((b) => (
-                          <div key={b.id} className="flex items-center space-x-3.5 bg-blue-600/5 p-3 rounded-xl border border-blue-500/10">
-                            <div className="rounded-lg bg-blue-500/10 p-2 text-blue-400 shrink-0">
-                              <Trophy className="h-5 w-5" />
-                            </div>
-                            <div className="truncate">
-                              <p className={`text-xs font-black text-slate-100 truncate`}>{b.name}</p>
-                              <p className="text-[10px] text-slate-400 truncate mt-0.5">{b.description}</p>
-                            </div>
-                          </div>
+                          <p key={b.id} className="text-xs font-bold text-white truncate">{b.name} unlocked 🎉</p>
                         ))}
                       </div>
                     )}
                   </div>
+
                 </div>
 
                 {/* Interactive Contributions Map */}

@@ -70,26 +70,42 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
     setLoading(true);
 
     try {
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (signInError) throw signInError;
-
-      if (data.user) {
-        // Sync with backend local memory storage representation
-        const usernameVal = data.user.user_metadata?.username || data.user.email?.split("@")[0] || "User";
-        const syncData = await safeFetchJson("/api/auth/sync", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: data.user.id, email: data.user.email, username: usernameVal }),
+      let loggedInToken = null;
+      try {
+        const { data, error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
         });
 
-        if (rememberMe) {
-          localStorage.setItem("ct_token", syncData.token);
+        if (signInError) throw signInError;
+
+        if (data.user) {
+          // Sync with backend local memory storage representation
+          const usernameVal = data.user.user_metadata?.username || data.user.email?.split("@")[0] || "User";
+          const syncData = await safeFetchJson("/api/auth/sync", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: data.user.id, email: data.user.email, username: usernameVal }),
+          });
+          loggedInToken = syncData.token;
         }
-        onLoginSuccess(syncData.token);
+      } catch (supabaseErr: any) {
+        console.warn("Supabase auth offline/failed, trying local database auth fallback:", supabaseErr);
+        const loginData = await safeFetchJson("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        });
+        loggedInToken = loginData.token;
+      }
+
+      if (loggedInToken) {
+        if (rememberMe) {
+          localStorage.setItem("ct_token", loggedInToken);
+        }
+        onLoginSuccess(loggedInToken);
+      } else {
+        setError("Could not establish session. Please verify your credentials.");
       }
     } catch (err: any) {
       setError(err.message || "Something went wrong.");
@@ -117,37 +133,60 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
     setLoading(true);
 
     try {
-      const { data, error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            username,
+      let registeredToken = null;
+      let isLocalOnly = false;
+      try {
+        const { data, error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              username,
+            },
           },
-        },
-      });
-
-      if (signUpError) throw signUpError;
-
-      if (data.user) {
-        // Sync registration details
-        const syncData = await safeFetchJson("/api/auth/sync", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: data.user.id, email: data.user.email, username }),
         });
 
-        setSuccessMsg("A verification email has been sent. Please verify your account.");
-        
-        // Let user log in right away in sandbox development, or wait
-        setTimeout(() => {
-          if (syncData.token) {
+        if (signUpError) throw signUpError;
+
+        if (data.user) {
+          // Sync registration details
+          const syncData = await safeFetchJson("/api/auth/sync", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: data.user.id, email: data.user.email, username }),
+          });
+          registeredToken = syncData.token;
+        }
+      } catch (supabaseErr: any) {
+        console.warn("Supabase sign up offline/failed, trying local database register fallback:", supabaseErr);
+        const regData = await safeFetchJson("/api/auth/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, email, password }),
+        });
+        registeredToken = regData.token;
+        isLocalOnly = true;
+      }
+
+      if (registeredToken) {
+        if (isLocalOnly) {
+          setSuccessMsg("Account created successfully! Logging you in...");
+          setTimeout(() => {
             if (rememberMe) {
-              localStorage.setItem("ct_token", syncData.token);
+              localStorage.setItem("ct_token", registeredToken);
             }
-            onLoginSuccess(syncData.token);
-          }
-        }, 3500);
+            onLoginSuccess(registeredToken);
+          }, 1500);
+        } else {
+          setSuccessMsg("A verification email has been sent. Please verify your account.");
+          // Let user log in right away in sandbox development, or wait
+          setTimeout(() => {
+            if (rememberMe) {
+              localStorage.setItem("ct_token", registeredToken);
+            }
+            onLoginSuccess(registeredToken);
+          }, 3500);
+        }
       } else {
         setError("Sign up succeeded but user details were empty. Please verify your inbox.");
       }
@@ -168,16 +207,30 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
     setLoading(true);
 
     try {
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/login?view=reset`,
-      });
-      if (resetError) throw resetError;
+      try {
+        const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/login?view=reset`,
+        });
+        if (resetError) throw resetError;
 
-      setSuccessMsg("Password reset link sent to registered email. Proceeding to Reset form...");
-      setTimeout(() => {
-        setView("reset");
-        resetFields();
-      }, 2000);
+        setSuccessMsg("Password reset link sent to registered email. Proceeding to Reset form...");
+        setTimeout(() => {
+          setView("reset");
+          resetFields();
+        }, 2000);
+      } catch (supabaseErr: any) {
+        console.warn("Supabase resetPasswordForEmail failing, triggering local database recovery fallback:", supabaseErr);
+        await safeFetchJson("/api/auth/forgot-password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
+        });
+        setSuccessMsg("Local password recovery triggered. Moving to reset form...");
+        setTimeout(() => {
+          setView("reset");
+          resetFields();
+        }, 1500);
+      }
     } catch (err: any) {
       setError(err.message || "Failed to process request.");
     } finally {
@@ -199,32 +252,50 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
     setLoading(true);
 
     try {
-      const { error: updateError } = await supabase.auth.updateUser({
-        password,
-      });
-      if (updateError) throw updateError;
+      let resetToken = null;
+      let isLocalOnly = false;
+      try {
+        const { error: updateError } = await supabase.auth.updateUser({
+          password,
+        });
+        if (updateError) throw updateError;
 
-      setSuccessMsg("Password updated successfully. Loading Dashboard...");
-
-      const { data: { user: supabaseUser } } = await supabase.auth.getUser();
-      if (supabaseUser) {
-        const usernameVal = supabaseUser.user_metadata?.username || supabaseUser.email?.split("@")[0] || "User";
-        try {
+        const { data: { user: supabaseUser } } = await supabase.auth.getUser();
+        if (supabaseUser) {
+          const usernameVal = supabaseUser.user_metadata?.username || supabaseUser.email?.split("@")[0] || "User";
           const syncData = await safeFetchJson("/api/auth/sync", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ id: supabaseUser.id, email: supabaseUser.email, username: usernameVal }),
           });
-          if (syncData && syncData.token) {
-            setTimeout(() => {
-              onLoginSuccess(syncData.token);
-            }, 1500);
-          } else {
-            setView("login");
-          }
-        } catch {
-          setView("login");
+          resetToken = syncData.token;
         }
+      } catch (supabaseErr) {
+        console.warn("Supabase updateUser failing, trying local database reset password fallback:", supabaseErr);
+        await safeFetchJson("/api/auth/reset-password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        });
+        
+        // Log in to get active local session token
+        const loginData = await safeFetchJson("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        });
+        resetToken = loginData.token;
+        isLocalOnly = true;
+      }
+
+      if (resetToken) {
+        setSuccessMsg("Password updated successfully. Loading Dashboard...");
+        setTimeout(() => {
+          if (rememberMe) {
+            localStorage.setItem("ct_token", resetToken);
+          }
+          onLoginSuccess(resetToken);
+        }, 1500);
       } else {
         setView("login");
       }
