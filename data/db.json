@@ -1,20 +1,5 @@
 {
   "users": {
-    "test": {
-      "id": "test",
-      "username": "testuser",
-      "email": "test@example.com",
-      "profilePicture": "letter:T:bg-blue-600",
-      "createdAt": "2026-06-19T05:21:52.016Z",
-      "currentStreak": 0,
-      "longestStreak": 0,
-      "totalTasksCompleted": 0,
-      "notificationEnabled": true,
-      "reminderTime": "09:00 AM",
-      "theme": "dark",
-      "isVerified": true,
-      "passwordHash": "supabase_managed"
-    },
     "6f9b775e-cb0d-4c2f-92f1-22107bbef004": {
       "id": "6f9b775e-cb0d-4c2f-92f1-22107bbef004",
       "username": "vicky",
@@ -29,13 +14,28 @@
       "theme": "dark",
       "isVerified": true,
       "passwordHash": "supabase_managed"
+    },
+    "test-id": {
+      "id": "test-id",
+      "username": "testuser",
+      "email": "test@example.com",
+      "profilePicture": "letter:T:bg-blue-600",
+      "createdAt": "2026-06-19T05:21:52.016Z",
+      "currentStreak": 0,
+      "longestStreak": 0,
+      "totalTasksCompleted": 0,
+      "notificationEnabled": true,
+      "reminderTime": "09:00 AM",
+      "theme": "dark",
+      "isVerified": true,
+      "passwordHash": "supabase_managed"
     }
   },
   "tasks": [],
   "completions": [],
   "dailyStats": [],
   "userBadges": {
-    "test": [],
-    "6f9b775e-cb0d-4c2f-92f1-22107bbef004": []
+    "6f9b775e-cb0d-4c2f-92f1-22107bbef004": [],
+    "test-id": []
   }
 }
