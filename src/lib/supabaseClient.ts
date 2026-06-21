@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 
 // Retrieve environment variables with secure fallback defaults
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://cwnkgmxssmjkqkyvzqnp.supabase.co";
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "sb_publishable_A6oljSlKv6yu1BK0Jl57eg_YNmoXsBx";
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN3bmtnbXhzc21qa3FreXZ6cW5wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAxMjUwNzUsImV4cCI6MjA5NTcwMTA3NX0.VBIWcgy1BM1OaQWlzanABX8MNWU-RAtz_xfxIiBcDV4";
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error(
