@@ -9,15 +9,20 @@ export function useSupabaseAuth() {
   const [error, setError] = useState<string | null>(null);
 
   // Sync Supabase Auth user with local Express server state
-  const syncWithBackend = async (supabaseUser: any, customUsername?: string): Promise<User | null> => {
+  const syncWithBackend = async (supabaseUser: any, accessToken?: string, customUsername?: string): Promise<User | null> => {
     if (!supabaseUser) return null;
     try {
       const username = customUsername || supabaseUser.user_metadata?.username || supabaseUser.email?.split("@")[0] || "User";
+      const headersInit: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (accessToken) {
+        headersInit["Authorization"] = `Bearer ${accessToken}`;
+      }
+      
       const response = await fetch("/api/auth/sync", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: headersInit,
         body: JSON.stringify({
           id: supabaseUser.id,
           email: supabaseUser.email,
@@ -25,12 +30,26 @@ export function useSupabaseAuth() {
         }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to sync session with server");
+      const text = await response.text();
+      const trimmed = text.trim();
+      if (trimmed.startsWith("<!DOCTYPE") || trimmed.startsWith("<html") || trimmed.includes("The page cannot be found")) {
+        throw new Error(`Server returned HTML instead of JSON status ${response.status}.`);
       }
 
-      const data = await response.json();
+      let data: any;
+      try {
+        data = JSON.parse(text);
+      } catch (parseErr) {
+        if (!response.ok) {
+          throw new Error(`Server returned status ${response.status}: ${response.statusText || "Request failed"}`);
+        }
+        throw new Error("Unable to parse server response.");
+      }
+
+      if (!response.ok) {
+        throw new Error(data.error || `Server responded with error status ${response.status}`);
+      }
+
       if (data.user) {
         setUser(data.user);
         setToken(data.token);
@@ -47,12 +66,11 @@ export function useSupabaseAuth() {
   // Initial session lookup and auth state change subscription
   useEffect(() => {
     let mounted = true;
-
     const initializeAuth = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user && mounted) {
-          await syncWithBackend(session.user);
+          await syncWithBackend(session.user, session.access_token);
         } else if (mounted) {
           // If no active Supabase session, clear local mock token too
           setUser(null);
@@ -74,7 +92,7 @@ export function useSupabaseAuth() {
       
       if (session?.user) {
         setLoading(true);
-        await syncWithBackend(session.user);
+        await syncWithBackend(session.user, session.access_token);
         setLoading(false);
       } else {
         setUser(null);
@@ -108,7 +126,7 @@ export function useSupabaseAuth() {
       
       if (data.user) {
         // Automatically sync the newly signed-up user
-        await syncWithBackend(data.user, username);
+        await syncWithBackend(data.user, data.session?.access_token, username);
       }
       return data;
     } catch (err: any) {
@@ -131,7 +149,7 @@ export function useSupabaseAuth() {
       if (signInError) throw signInError;
 
       if (data.user) {
-        await syncWithBackend(data.user);
+        await syncWithBackend(data.user, data.session?.access_token);
       }
       return data;
     } catch (err: any) {

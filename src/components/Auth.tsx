@@ -266,12 +266,16 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
         });
         if (updateError) throw updateError;
 
+        const { data: { session } } = await supabase.auth.getSession();
         const { data: { user: supabaseUser } } = await supabase.auth.getUser();
         if (supabaseUser) {
           const usernameVal = supabaseUser.user_metadata?.username || supabaseUser.email?.split("@")[0] || "User";
           const syncData = await safeFetchJson("/api/auth/sync", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { 
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${session?.access_token || ""}`
+            },
             body: JSON.stringify({ id: supabaseUser.id, email: supabaseUser.email, username: usernameVal }),
           });
           resetToken = syncData.token;
