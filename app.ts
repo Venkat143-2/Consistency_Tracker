@@ -10,7 +10,7 @@ import { TaskCategory } from "./src/types";
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "https://cwnkgmxssmjkqkyvzqnp.supabase.co";
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || "";
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN3bmtnbXhzc21qa3FreXZ6cW5wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAxMjUwNzUsImV4cCI6MjA5NTcwMTA3NX0.VBIWcgy1BM1OaQWlzanABX8MNWU-RAtz_xfxIiBcDV4";
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 async function syncFromSupabase(userId: string, token: string): Promise<void> {
