@@ -7,6 +7,70 @@ import express, { Request, Response, NextFunction } from "express";
 import path from "path";
 import { dbService, getLocalDateString } from "./server/db";
 import { TaskCategory } from "./src/types";
+import { createClient } from "@supabase/supabase-js";
+
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "https://cwnkgmxssmjkqkyvzqnp.supabase.co";
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || "";
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+async function syncFromSupabase(userId: string, token: string): Promise<void> {
+  try {
+    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    });
+
+    const { data, error } = await userClient
+      .from("profiles")
+      .select("full_name")
+      .eq("id", userId)
+      .single();
+
+    if (error) {
+      console.warn(`[Sync] Failed to fetch profile sync for user ${userId}:`, error.message);
+      return;
+    }
+
+    if (data && data.full_name && data.full_name.startsWith("{")) {
+      const slice = JSON.parse(data.full_name);
+      (dbService as any).importUserSlices(userId, slice);
+      console.log(`[Sync] Successfully restored database state from Supabase for user ${userId}`);
+    }
+  } catch (err: any) {
+    console.error(`[Sync] Error syncing from Supabase for user ${userId}:`, err?.message || err);
+  }
+}
+
+async function syncToSupabase(userId: string, token: string): Promise<void> {
+  try {
+    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    });
+
+    const slice = (dbService as any).exportUserSlices(userId);
+    const payload = JSON.stringify(slice);
+
+    const { error } = await userClient
+      .from("profiles")
+      .update({ full_name: payload })
+      .eq("id", userId);
+
+    if (error) {
+      console.warn(`[Sync] Failed to save profile sync for user ${userId}:`, error.message);
+    } else {
+      console.log(`[Sync] Successfully saved database state to Supabase for user ${userId}`);
+    }
+  } catch (err: any) {
+    console.error(`[Sync] Error syncing to Supabase for user ${userId}:`, err?.message || err);
+  }
+}
 
 // Helper to calculate total active days
 function getDaysBetween(d1: string, d2: string): number {
@@ -24,21 +88,63 @@ app.use(express.json({ limit: "15mb" }));
 
   // Simplistic auth token handler
   // Handled either by a Header "Authorization: Bearer <user_id>" or dynamic parameters
-  const authenticateUser = (req: Request, res: Response, next: NextFunction): void => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      res.status(401).json({ error: "Access denied. Auth token missing." });
-      return;
+  const authenticateUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        res.status(401).json({ error: "Access denied. Auth token missing." });
+        return;
+      }
+      const token = authHeader.split(" ")[1];
+
+      let userId = token;
+      let user = null;
+
+      if (token.includes(".")) {
+        // Supabase JWT authentication
+        const { data: { user: sbUser }, error } = await supabase.auth.getUser(token);
+        if (error || !sbUser) {
+          res.status(401).json({ error: "Invalid Supabase session." });
+          return;
+        }
+        userId = sbUser.id;
+
+        // Sync from Supabase to ensure they are using latest distributed data
+        await syncFromSupabase(userId, token);
+
+        user = dbService.getOrCreateUser(userId, sbUser.email!, sbUser.user_metadata?.username || sbUser.email!.split("@")[0]);
+      } else {
+        // Local fallback / mock authentication
+        user = dbService.getUserById(token);
+      }
+
+      if (!user) {
+        res.status(401).json({ error: "Session expired or invalid user." });
+        return;
+      }
+
+      // Automatically sync changes back after the request finished serving (async afterwrite hook pattern)
+      const originalJson = res.json;
+      res.json = function (body) {
+        res.json = originalJson; // restoration
+        const result = originalJson.call(this, body);
+
+        if (token.includes(".")) {
+          syncToSupabase(userId, token).catch((err) => {
+            console.error("Delayed syncToSupabase failed in background:", err);
+          });
+        }
+        return result;
+      };
+
+      // Attach user and token to request
+      (req as any).user = user;
+      (req as any).token = token;
+      next();
+    } catch (err: any) {
+      console.error("Authentication middleware failure:", err);
+      res.status(500).json({ error: "Authentication system error: " + err.message });
     }
-    const userId = authHeader.split(" ")[1];
-    const user = dbService.getUserById(userId);
-    if (!user) {
-      res.status(401).json({ error: "Session expired or invalid user." });
-      return;
-    }
-    // Attach user to request
-    (req as any).user = user;
-    next();
   };
 
   // --- API ROUTING ENTRY POINTS ---
@@ -150,16 +256,32 @@ app.use(express.json({ limit: "15mb" }));
   });
 
   // Auth: Sync Supabase User with Local Profile
-  app.post("/api/auth/sync", (req: Request, res: Response) => {
+  app.post("/api/auth/sync", async (req: Request, res: Response) => {
     try {
       const { id, email, username } = req.body;
       if (!id || !email) {
         res.status(400).json({ error: "Missing required sync parameters id and email." });
         return;
       }
+
+      const authHeader = req.headers.authorization;
+      const token = authHeader && authHeader.startsWith("Bearer ") ? authHeader.split(" ")[1] : null;
+
+      if (token && token.includes(".")) {
+        // Sync existing data down from Supabase first
+        await syncFromSupabase(id, token);
+      }
+
       const user = dbService.getOrCreateUser(id, email, username || email.split("@")[0]);
-      res.json({ user, token: id });
+
+      if (token && token.includes(".")) {
+        // Save initial user state back up to Supabase
+        await syncToSupabase(id, token);
+      }
+
+      res.json({ user, token: token || id });
     } catch (err: any) {
+      console.error("Session sync failed:", err);
       res.status(500).json({ error: err.message || "Session sync failed." });
     }
   });

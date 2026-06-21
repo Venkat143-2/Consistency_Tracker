@@ -84,10 +84,13 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
           const usernameVal = data.user.user_metadata?.username || data.user.email?.split("@")[0] || "User";
           const syncData = await safeFetchJson("/api/auth/sync", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { 
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${data.session?.access_token || ""}`
+            },
             body: JSON.stringify({ id: data.user.id, email: data.user.email, username: usernameVal }),
           });
-          loggedInToken = syncData.token;
+          loggedInToken = data.session?.access_token || syncData.token;
         }
       } catch (supabaseErr: any) {
         console.warn("Supabase auth offline/failed, trying local database auth fallback:", supabaseErr);
@@ -152,10 +155,13 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
           // Sync registration details
           const syncData = await safeFetchJson("/api/auth/sync", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { 
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${data.session?.access_token || ""}`
+            },
             body: JSON.stringify({ id: data.user.id, email: data.user.email, username }),
           });
-          registeredToken = syncData.token;
+          registeredToken = data.session?.access_token || syncData.token;
         }
       } catch (supabaseErr: any) {
         console.warn("Supabase sign up offline/failed, trying local database register fallback:", supabaseErr);

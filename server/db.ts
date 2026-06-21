@@ -666,5 +666,37 @@ export const dbService = {
       completions: db.completions.filter((c) => c.userId === userId),
       stats: db.dailyStats.filter((s) => s.userId === userId),
     };
+  },
+
+  importUserSlices: (userId: string, dataSlice: any): void => {
+    const db = readDB();
+    if (dataSlice) {
+      if (dataSlice.user) {
+        db.users[userId] = { ...dataSlice.user, id: userId };
+      }
+      if (Array.isArray(dataSlice.tasks)) {
+        db.tasks = db.tasks.filter((t) => t.userId !== userId).concat(dataSlice.tasks);
+      }
+      if (Array.isArray(dataSlice.completions)) {
+        db.completions = db.completions.filter((c) => c.userId !== userId).concat(dataSlice.completions);
+      }
+      if (Array.isArray(dataSlice.dailyStats)) {
+        db.dailyStats = db.dailyStats.filter((s) => s.userId !== userId).concat(dataSlice.dailyStats);
+      }
+      db.userBadges[userId] = Array.isArray(dataSlice.userBadges) ? dataSlice.userBadges : (db.userBadges[userId] || []);
+      writeDB(db);
+    }
+  },
+
+  exportUserSlices: (userId: string) => {
+    const db = readDB();
+    const user = db.users[userId];
+    return {
+      user,
+      tasks: db.tasks.filter((t) => t.userId === userId),
+      completions: db.completions.filter((c) => c.userId === userId),
+      dailyStats: db.dailyStats.filter((s) => s.userId === userId),
+      userBadges: db.userBadges[userId] || [],
+    };
   }
 };

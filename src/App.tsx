@@ -122,15 +122,18 @@ export default function App() {
           const usernameVal = session.user.user_metadata?.username || session.user.email?.split("@")[0] || "User";
           const res = await fetchWithRetry("/api/auth/sync", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { 
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${session.access_token}`
+            },
             body: JSON.stringify({ id: session.user.id, email: session.user.email, username: usernameVal }),
           });
           const data = await res.json();
           if (res.ok && data.user && mounted) {
             setUser(data.user);
-            setToken(data.token);
-            localStorage.setItem("ct_token", data.token);
-            await syncTrackerData(data.user.id, data.token);
+            setToken(session.access_token);
+            localStorage.setItem("ct_token", session.access_token);
+            await syncTrackerData(data.user.id, session.access_token);
           } else if (mounted) {
             setToken(null);
             setUser(null);
@@ -187,15 +190,18 @@ export default function App() {
           try {
             const res = await fetchWithRetry("/api/auth/sync", {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: { 
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${session.access_token}`
+              },
               body: JSON.stringify({ id: session.user.id, email: session.user.email, username: usernameVal }),
             });
             const data = await res.json();
             if (res.ok && data.user) {
               setUser(data.user);
-              setToken(data.token);
-              localStorage.setItem("ct_token", data.token);
-              await syncTrackerData(data.user.id, data.token);
+              setToken(session.access_token);
+              localStorage.setItem("ct_token", session.access_token);
+              await syncTrackerData(data.user.id, session.access_token);
             }
           } catch (syncErr) {
             console.error("Error syncing active Supabase session with local backend:", syncErr);
