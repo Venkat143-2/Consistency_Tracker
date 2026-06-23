@@ -128,12 +128,14 @@ export default function App() {
             },
             body: JSON.stringify({ id: session.user.id, email: session.user.email, username: usernameVal }),
           });
-          const data = await res.json();
-          if (res.ok && data.user && mounted) {
-            setUser(data.user);
-            setToken(session.access_token);
-            localStorage.setItem("ct_token", session.access_token);
-            await syncTrackerData(data.user.id, session.access_token);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.user && mounted) {
+              setUser(data.user);
+              setToken(session.access_token);
+              localStorage.setItem("ct_token", session.access_token);
+              await syncTrackerData(data.user.id, session.access_token);
+            }
           } else if (mounted) {
             setToken(null);
             setUser(null);
@@ -196,12 +198,14 @@ export default function App() {
               },
               body: JSON.stringify({ id: session.user.id, email: session.user.email, username: usernameVal }),
             });
-            const data = await res.json();
-            if (res.ok && data.user) {
-              setUser(data.user);
-              setToken(session.access_token);
-              localStorage.setItem("ct_token", session.access_token);
-              await syncTrackerData(data.user.id, session.access_token);
+            if (res.ok) {
+              const data = await res.json();
+              if (data.user) {
+                setUser(data.user);
+                setToken(session.access_token);
+                localStorage.setItem("ct_token", session.access_token);
+                await syncTrackerData(data.user.id, session.access_token);
+              }
             }
           } catch (syncErr) {
             console.error("Error syncing active Supabase session with local backend:", syncErr);
@@ -238,8 +242,8 @@ export default function App() {
       const tasksRes = await fetchWithRetry("/api/tasks", {
         headers: { Authorization: `Bearer ${activeToken}` },
       });
-      const tasksData = await tasksRes.json();
       if (tasksRes.ok) {
+        const tasksData = await tasksRes.json();
         const rawTasks = tasksData.tasks || [];
         setTasks(rawTasks);
       }
@@ -248,8 +252,8 @@ export default function App() {
       const badgesRes = await fetchWithRetry("/api/badges", {
         headers: { Authorization: `Bearer ${activeToken}` },
       });
-      const badgesData = await badgesRes.json();
       if (badgesRes.ok) {
+        const badgesData = await badgesRes.json();
         setBadges(badgesData.badges || []);
       }
 
@@ -257,8 +261,8 @@ export default function App() {
       const analyticsRes = await fetchWithRetry("/api/analytics", {
         headers: { Authorization: `Bearer ${activeToken}` },
       });
-      const analyticsData = await analyticsRes.json();
       if (analyticsRes.ok) {
+        const analyticsData = await analyticsRes.json();
         setStats(analyticsData.stats || []);
         setAnalyticsSummary(analyticsData.summary);
         setCategoryDistribution(analyticsData.categoryDistribution || []);
@@ -304,8 +308,8 @@ export default function App() {
           Authorization: `Bearer ${token}`
         }
       });
-      const data = await res.json();
       if (res.ok) {
+        const data = await res.json();
         // Optimistically update tasks and user metric stats immediately
         setTasks(data.tasks);
         if (data.user) {
