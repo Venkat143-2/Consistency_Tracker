@@ -5,7 +5,7 @@
 
 import * as fs from "fs";
 import * as path from "path";
-import { User, Task, TaskCompletion, DailyStats, Badge, TaskCategory, ExportData } from "../src/types";
+import { User, Task, TaskCompletion, DailyStats, Badge, TaskCategory, ExportData } from "../src/types.js";
 
 const isServerless = typeof process.env.VERCEL !== "undefined" || process.env.NODE_ENV === "production";
 const DB_DIR = isServerless ? "/tmp" : path.join(process.cwd(), "data");

@@ -5,8 +5,8 @@
 
 import express, { Request, Response, NextFunction } from "express";
 import path from "path";
-import { dbService, getLocalDateString } from "./server/db";
-import { TaskCategory } from "./src/types";
+import { dbService, getLocalDateString } from "./server/db.js";
+import { TaskCategory } from "./src/types.js";
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "https://cwnkgmxssmjkqkyvzqnp.supabase.co";
