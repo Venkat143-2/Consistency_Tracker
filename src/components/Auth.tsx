@@ -16,18 +16,20 @@ async function safeFetchJson(url: string, options: RequestInit): Promise<any> {
     throw new Error(`Server returned HTML instead of JSON. Ensure the server is running and the route '${url}' is registered.`);
   }
 
+  let data: any;
   try {
-    const data = JSON.parse(text);
-    if (!response.ok) {
-      throw new Error(data.error || `Server responded with error status ${response.status}`);
-    }
-    return data;
+    data = JSON.parse(text);
   } catch (err: any) {
     if (!response.ok) {
       throw new Error(`Server returned status ${response.status}: ${response.statusText || "Request failed"}`);
     }
     throw new Error(err.message || "Unable to parse server response.");
   }
+
+  if (!response.ok) {
+    throw new Error(data.error || `Server responded with error status ${response.status}`);
+  }
+  return data;
 }
 
 interface AuthProps {
