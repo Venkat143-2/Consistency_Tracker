@@ -99,9 +99,6 @@ export default function App() {
       if (!user && !token && currentPath === "/dashboard") {
         navigateTo("/login");
       }
-      if (user && token && (currentPath === "/login" || currentPath === "/register" || currentPath === "/signup")) {
-        navigateTo("/dashboard");
-      }
     }
   }, [sessionLoading, user, token, currentPath]);
 
@@ -480,38 +477,36 @@ export default function App() {
     );
   }
 
-  // If no sessions, render Auth form pages (login/signup) or Landing Page
+  // Global auth routes: always accessible even if logged in (for multiple accounts, switching, etc.)
+  if (currentPath === "/login") {
+    return (
+      <Auth
+        onLoginSuccess={handleLoginSuccess}
+        defaultView="login"
+        onViewChange={(view) => navigateTo(view === "login" ? "/login" : "/signup")}
+        onNavigateHome={() => navigateTo("/")}
+      />
+    );
+  }
+  if (currentPath === "/register" || currentPath === "/signup") {
+    return (
+      <Auth
+        onLoginSuccess={handleLoginSuccess}
+        defaultView="register"
+        onViewChange={(view) => navigateTo(view === "login" ? "/login" : "/signup")}
+        onNavigateHome={() => navigateTo("/")}
+      />
+    );
+  }
+
+  // If no sessions, render Landing Page
   if (!user || !token) {
-    if (currentPath === "/login") {
-      return (
-        <Auth
-          onLoginSuccess={handleLoginSuccess}
-          defaultView="login"
-          onViewChange={(view) => navigateTo(view === "login" ? "/login" : "/signup")}
-          onNavigateHome={() => navigateTo("/")}
-        />
-      );
-    }
-    if (currentPath === "/register" || currentPath === "/signup") {
-      return (
-        <Auth
-          onLoginSuccess={handleLoginSuccess}
-          defaultView="register"
-          onViewChange={(view) => navigateTo(view === "login" ? "/login" : "/signup")}
-          onNavigateHome={() => navigateTo("/")}
-        />
-      );
-    }
-    // Default to LandingPage for "/" or "/dashboard" (redirected by useEffect anyway)
+    // Default to LandingPage for "/" or other pages
     return <LandingPage onNavigate={navigateTo} isLoggedIn={false} />;
   }
 
-  // If already logged in, check if visiting "/" or Auth pages:
+  // If already logged in, check if visiting "/":
   if (currentPath === "/") {
-    return <LandingPage onNavigate={navigateTo} isLoggedIn={true} />;
-  }
-  if (currentPath === "/login" || currentPath === "/register" || currentPath === "/signup") {
-    // Will be auto-redirected to /dashboard by effect, but immediately render LandingPage
     return <LandingPage onNavigate={navigateTo} isLoggedIn={true} />;
   }
 
@@ -574,11 +569,7 @@ export default function App() {
           </button>
 
           {/* Logo brand */}
-          <div
-            onClick={() => navigateTo("/")}
-            className="flex items-center space-x-3 mb-8 cursor-pointer hover:opacity-80 transition-opacity justify-center md:justify-start"
-            title="Go to Home Landing Page"
-          >
+          <div className="flex items-center space-x-3 mb-8 justify-center md:justify-start">
             <div className="rounded-xl bg-teal-500/10 border border-teal-500/20 p-2 text-[#04D9C4] shrink-0">
               <ShieldCheck className="h-6 w-6 stroke-[2.5]" />
             </div>
