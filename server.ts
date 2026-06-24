@@ -14,7 +14,9 @@ const envPath = path.resolve(process.cwd(), ".env");
 if (fs.existsSync(envLocalPath)) {
   dotenv.config({ path: envLocalPath });
 }
-dotenv.config({ path: envPath });
+if (fs.existsSync(envPath)) {
+  dotenv.config({ path: envPath });
+}
 
 import express, { Request, Response, NextFunction } from "express";
 import { dbService, getLocalDateString } from "./server/db.js";
