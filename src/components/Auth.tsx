@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { Mail, Lock, User as UserIcon, ArrowRight, Eye, EyeOff, ShieldCheck } from "lucide-react";
+import { Mail, Lock, User as UserIcon, ArrowRight, Eye, EyeOff, ShieldCheck, AlertCircle, Database } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 
 async function safeFetchJson(url: string, options: RequestInit): Promise<any> {
@@ -30,6 +30,66 @@ async function safeFetchJson(url: string, options: RequestInit): Promise<any> {
     throw new Error(data.error || `Server responded with error status ${response.status}`);
   }
   return data;
+}
+
+function formatSupabaseError(err: any): string {
+  if (!err) return "An unknown error occurred.";
+  if (typeof err === "string") return err;
+  
+  // Detect network or fetch connection failures specifically
+  const isNetworkOrFetchError = 
+    err.name === "AuthRetryableFetchError" ||
+    (err.message && (
+      err.message.includes("fetch") || 
+      err.message.includes("Failed to fetch") || 
+      err.message.includes("NetworkError") ||
+      err.message === "{}"
+    )) ||
+    err.status === 500;
+
+  if (isNetworkOrFetchError) {
+    return (
+      "Network connection to Supabase failed. Please make sure that:\n" +
+      "1. Your custom Supabase project is active and not paused.\n" +
+      "2. The VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY env variables are configured correctly.\n" +
+      "3. No ad blocker or firewall is blocking requests to your Supabase domain."
+    );
+  }
+
+  // Extract common Supabase / standard error fields
+  const parts: string[] = [];
+  if (err.message && err.message !== "{}") parts.push(err.message);
+  if (err.description) parts.push(err.description);
+  if (err.error_description) parts.push(err.error_description);
+  
+  if (parts.length > 0) {
+    let msg = parts.join(" ");
+    if (err.status) msg += ` (Status: ${err.status})`;
+    if (err.code) msg += ` [Code: ${err.code}]`;
+    return msg;
+  }
+
+  // Fallback: serialize non-enumerable properties of standard Error / AuthError objects
+  try {
+    const obj: any = {};
+    const keys = Object.getOwnPropertyNames(err);
+    for (const key of keys) {
+      if (err[key] !== "{}" && key !== "stack") {
+        obj[key] = err[key];
+      }
+    }
+    if (Object.keys(obj).length > 0) {
+      return JSON.stringify(obj);
+    }
+  } catch (e) {
+    // Ignore stringify errors
+  }
+
+  if (err.name) {
+    return `${err.name}: Could not connect to Supabase. Please check your credentials and project status.`;
+  }
+
+  return String(err);
 }
 
 interface AuthProps {
@@ -62,6 +122,22 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
     setSuccessMsg("");
   };
 
+  const getAccessTokenFromUrl = () => {
+    const hash = window.location.hash;
+    if (hash) {
+      const params = new URLSearchParams(hash.substring(1));
+      const token = params.get("access_token");
+      if (token) return token;
+    }
+    const search = window.location.search;
+    if (search) {
+      const params = new URLSearchParams(search);
+      const token = params.get("access_token");
+      if (token) return token;
+    }
+    return localStorage.getItem("ct_token");
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
@@ -72,48 +148,44 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
     setLoading(true);
 
     try {
-      let loggedInToken = null;
-      try {
-        const { data, error: signInError } = await supabase.auth.signInWithPassword({
-          email,
+      // Always invoke our server proxy API to authenticate reliably
+      const data = await safeFetchJson("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          email, 
           password,
-        });
+        }),
+      });
 
-        if (signInError) throw signInError;
-
-        if (data.user) {
-          // Sync with backend local memory storage representation
-          const usernameVal = data.user.user_metadata?.username || data.user.email?.split("@")[0] || "User";
-          const syncData = await safeFetchJson("/api/auth/sync", {
-            method: "POST",
-            headers: { 
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${data.session?.access_token || ""}`
-            },
-            body: JSON.stringify({ id: data.user.id, email: data.user.email, username: usernameVal }),
-          });
-          loggedInToken = data.session?.access_token || syncData.token;
-        }
-      } catch (supabaseErr: any) {
-        console.warn("Supabase auth offline/failed, trying local database auth fallback:", supabaseErr);
-        const loginData = await safeFetchJson("/api/auth/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password }),
-        });
-        loggedInToken = loginData.token;
-      }
+      const loggedInToken = data.token;
 
       if (loggedInToken) {
         if (rememberMe) {
           localStorage.setItem("ct_token", loggedInToken);
+          localStorage.setItem("ct_auth_mode", "supabase");
         }
+
+        // Keep local client-side client state in sync if possible
+        if (loggedInToken && loggedInToken.includes(".")) {
+          try {
+            await supabase.auth.setSession({
+              access_token: loggedInToken,
+              refresh_token: loggedInToken,
+            });
+          } catch (setSessErr) {
+            console.warn("Could not set local Supabase client session (gracefully bypassed):", setSessErr);
+          }
+        }
+
         onLoginSuccess(loggedInToken);
       } else {
         setError("Could not establish session. Please verify your credentials.");
       }
     } catch (err: any) {
-      setError(err.message || "Something went wrong.");
+      const formattedErr = formatSupabaseError(err);
+      console.warn("Login failed:", formattedErr);
+      setError(formattedErr);
     } finally {
       setLoading(false);
     }
@@ -138,68 +210,32 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
     setLoading(true);
 
     try {
-      let registeredToken = null;
-      let isLocalOnly = false;
-      try {
-        const { data, error: signUpError } = await supabase.auth.signUp({
-          email,
+      // Invoke our server proxy API for reliable registration
+      const data = await safeFetchJson("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          username, 
+          email, 
           password,
-          options: {
-            data: {
-              username,
-            },
-          },
-        });
+        }),
+      });
 
-        if (signUpError) throw signUpError;
+      setSuccessMsg(data.message || "Registration successful!");
 
-        if (data.user) {
-          // Sync registration details
-          const syncData = await safeFetchJson("/api/auth/sync", {
-            method: "POST",
-            headers: { 
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${data.session?.access_token || ""}`
-            },
-            body: JSON.stringify({ id: data.user.id, email: data.user.email, username }),
-          });
-          registeredToken = data.session?.access_token || syncData.token;
-        }
-      } catch (supabaseErr: any) {
-        console.warn("Supabase sign up offline/failed, trying local database register fallback:", supabaseErr);
-        const regData = await safeFetchJson("/api/auth/register", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username, email, password }),
-        });
-        registeredToken = regData.token;
-        isLocalOnly = true;
-      }
+      // Clear sensitive password inputs
+      setPassword("");
+      setConfirmPassword("");
 
-      if (registeredToken) {
-        if (isLocalOnly) {
-          setSuccessMsg("Account created successfully! Logging you in...");
-          setTimeout(() => {
-            if (rememberMe) {
-              localStorage.setItem("ct_token", registeredToken);
-            }
-            onLoginSuccess(registeredToken);
-          }, 1500);
-        } else {
-          setSuccessMsg("A verification email has been sent. Please verify your account.");
-          // Let user log in right away in sandbox development, or wait
-          setTimeout(() => {
-            if (rememberMe) {
-              localStorage.setItem("ct_token", registeredToken);
-            }
-            onLoginSuccess(registeredToken);
-          }, 3500);
-        }
-      } else {
-        setError("Sign up succeeded but user details were empty. Please verify your inbox.");
-      }
+      // Redirect the user to the login view after a few seconds
+      setTimeout(() => {
+        setView("login");
+        resetFields();
+      }, 5000);
     } catch (err: any) {
-      setError(err.message || "Failed to register.");
+      const formattedErr = formatSupabaseError(err);
+      console.error("Sign up failed:", formattedErr);
+      setError(formattedErr);
     } finally {
       setLoading(false);
     }
@@ -215,31 +251,20 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
     setLoading(true);
 
     try {
-      try {
-        const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${window.location.origin}/login?view=reset`,
-        });
-        if (resetError) throw resetError;
-
-        setSuccessMsg("Password reset link sent to registered email. Proceeding to Reset form...");
-        setTimeout(() => {
-          setView("reset");
-          resetFields();
-        }, 2000);
-      } catch (supabaseErr: any) {
-        console.warn("Supabase resetPasswordForEmail failing, triggering local database recovery fallback:", supabaseErr);
-        await safeFetchJson("/api/auth/forgot-password", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email }),
-        });
-        setSuccessMsg("Local password recovery triggered. Moving to reset form...");
-        setTimeout(() => {
-          setView("reset");
-          resetFields();
-        }, 1500);
-      }
+      const data = await safeFetchJson("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          email,
+        }),
+      });
+      setSuccessMsg(data.message || "A recovery email has been sent. Please check your inbox.");
+      setTimeout(() => {
+        setView("reset");
+        resetFields();
+      }, 2000);
     } catch (err: any) {
+      console.error("Password recovery failed:", err);
       setError(err.message || "Failed to process request.");
     } finally {
       setLoading(false);
@@ -260,58 +285,31 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
     setLoading(true);
 
     try {
-      let resetToken = null;
-      let isLocalOnly = false;
-      try {
-        const { error: updateError } = await supabase.auth.updateUser({
+      const headersInit: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+
+      const tokenVal = getAccessTokenFromUrl();
+      if (tokenVal) {
+        headersInit["Authorization"] = `Bearer ${tokenVal}`;
+      }
+
+      const data = await safeFetchJson("/api/auth/reset-password", {
+        method: "POST",
+        headers: headersInit,
+        body: JSON.stringify({ 
+          email, 
           password,
-        });
-        if (updateError) throw updateError;
+        }),
+      });
 
-        const { data: { session } } = await supabase.auth.getSession();
-        const { data: { user: supabaseUser } } = await supabase.auth.getUser();
-        if (supabaseUser) {
-          const usernameVal = supabaseUser.user_metadata?.username || supabaseUser.email?.split("@")[0] || "User";
-          const syncData = await safeFetchJson("/api/auth/sync", {
-            method: "POST",
-            headers: { 
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${session?.access_token || ""}`
-            },
-            body: JSON.stringify({ id: supabaseUser.id, email: supabaseUser.email, username: usernameVal }),
-          });
-          resetToken = syncData.token;
-        }
-      } catch (supabaseErr) {
-        console.warn("Supabase updateUser failing, trying local database reset password fallback:", supabaseErr);
-        await safeFetchJson("/api/auth/reset-password", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password }),
-        });
-        
-        // Log in to get active local session token
-        const loginData = await safeFetchJson("/api/auth/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password }),
-        });
-        resetToken = loginData.token;
-        isLocalOnly = true;
-      }
-
-      if (resetToken) {
-        setSuccessMsg("Password updated successfully. Loading Dashboard...");
-        setTimeout(() => {
-          if (rememberMe) {
-            localStorage.setItem("ct_token", resetToken);
-          }
-          onLoginSuccess(resetToken);
-        }, 1500);
-      } else {
+      setSuccessMsg(data.message || "Your password has been successfully updated. Please log in.");
+      setTimeout(() => {
         setView("login");
-      }
+        resetFields();
+      }, 2000);
     } catch (err: any) {
+      console.error("Password update failed:", err);
       setError(err.message || "Failed to reset password.");
     } finally {
       setLoading(false);
@@ -319,19 +317,19 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-900 px-4 py-12 font-sans select-none text-slate-100">
-      {/* Decorative Blur Orbs */}
+    <div className="flex min-h-screen items-center justify-center bg-[#050811] px-4 py-12 font-sans select-none text-slate-100 relative overflow-hidden">
+      {/* Subtle background glow effects to keep design rich */}
       <div className="absolute top-1/4 left-1/4 -z-10 h-72 w-72 rounded-full bg-blue-500/10 blur-[120px]" />
       <div className="absolute bottom-1/4 right-1/4 -z-10 h-72 w-72 rounded-full bg-indigo-500/10 blur-[120px]" />
 
-      <div className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/80 p-8 shadow-2xl backdrop-blur-xl">
+      <div className="w-full max-w-[440px] overflow-hidden rounded-2xl border border-slate-800/40 bg-[#070b13] p-8 shadow-2xl">
         <div className="text-center">
           <div
             onClick={() => onNavigateHome?.()}
-            className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-blue-600/10 text-blue-500 border border-blue-500/20 cursor-pointer hover:scale-105 transition-all"
+            className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-[#0b1528] text-blue-500 border border-blue-500/20 cursor-pointer hover:scale-105 transition-all"
             title="Go to Home Landing Page"
           >
-            <ShieldCheck className="h-6 w-6 animate-pulse" />
+            <ShieldCheck className="h-6 w-6 text-blue-500" />
           </div>
           <h1
             onClick={() => onNavigateHome?.()}
@@ -350,8 +348,13 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
 
         {/* Global Error & Success Alerts */}
         {error && (
-          <div className="mt-4 rounded-lg bg-rose-500/10 border border-rose-500/20 px-4 py-2.5 text-xs text-rose-400">
-            {error}
+          <div className="mt-4 rounded-lg bg-rose-500/10 border border-rose-500/20 px-4 py-3 text-xs text-rose-400 whitespace-pre-line leading-relaxed">
+            <div className="flex items-start space-x-2">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-500" />
+              <div className="flex-1">
+                <span>{error}</span>
+              </div>
+            </div>
           </div>
         )}
         {successMsg && (
@@ -363,16 +366,16 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
         {view === "login" && (
           <form onSubmit={handleLogin} className="mt-6 space-y-4">
             <div>
-              <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">
                 Email Address
               </label>
-              <div className="relative mt-1">
-                <Mail className="absolute top-2.5 left-3 h-4 h-4 text-slate-500" />
+              <div className="relative">
+                <Mail className="absolute top-3 left-3 h-4 w-4 text-slate-500" />
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full rounded-lg border border-slate-800 bg-slate-900/50 py-2 pl-10 pr-4 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                  className="w-full rounded-lg border border-[#162235] bg-[#0b111e] py-2.5 pl-10 pr-4 text-sm text-white placeholder-slate-600 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500/20 transition-all"
                   placeholder="name@domain.com"
                   required
                 />
@@ -380,8 +383,8 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
             </div>
 
             <div>
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                   Password
                 </label>
                 <button
@@ -390,25 +393,25 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
                     setView("forgot");
                     resetFields();
                   }}
-                  className="text-xs font-medium text-blue-500 hover:underline"
+                  className="text-[11px] font-semibold text-blue-500 hover:underline cursor-pointer"
                 >
                   Forgot?
                 </button>
               </div>
-              <div className="relative mt-1">
-                <Lock className="absolute top-2.5 left-3 h-4 h-4 text-slate-500" />
+              <div className="relative">
+                <Lock className="absolute top-3 left-3 h-4 w-4 text-slate-500" />
                 <input
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-lg border border-slate-800 bg-slate-900/50 py-2 pl-10 pr-10 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                  className="w-full rounded-lg border border-[#162235] bg-[#0b111e] py-2.5 pl-10 pr-10 text-sm text-white placeholder-slate-600 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500/20 transition-all"
                   placeholder="••••••••"
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute top-2.5 right-3 text-slate-500 hover:text-slate-300"
+                  className="absolute top-3 right-3.5 text-slate-500 hover:text-slate-300"
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
@@ -421,7 +424,7 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
                   type="checkbox"
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
-                  className="rounded border-slate-800 bg-slate-900 text-blue-500 focus:ring-0 focus:ring-offset-0"
+                  className="rounded border-[#162235] bg-[#0b111e] text-blue-600 focus:ring-0 focus:ring-offset-0"
                 />
                 <span>Remember me on this browser</span>
               </label>
@@ -430,7 +433,7 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
             <button
               type="submit"
               disabled={loading}
-              className="flex w-full items-center justify-center space-x-2 rounded-lg bg-blue-600 hover:bg-blue-500 py-2.5 font-medium text-white transition-all disabled:opacity-50"
+              className="flex w-full items-center justify-center space-x-2 rounded-lg bg-[#1b58f6] hover:bg-[#2563eb] py-3 text-sm font-semibold text-white transition-all duration-200 disabled:opacity-50 cursor-pointer"
             >
               <span>{loading ? "Signing in..." : "Sign In"}</span>
               {!loading && <ArrowRight className="h-4 w-4" />}
@@ -441,16 +444,16 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
         {view === "register" && (
           <form onSubmit={handleRegister} className="mt-6 space-y-4">
             <div>
-              <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">
                 Desired Username
               </label>
-              <div className="relative mt-1">
-                <UserIcon className="absolute top-2.5 left-3 h-4 h-4 text-slate-500" />
+              <div className="relative">
+                <UserIcon className="absolute top-3 left-3 h-4 w-4 text-slate-500" />
                 <input
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="w-full rounded-lg border border-slate-800 bg-slate-900/50 py-2 pl-10 pr-4 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                  className="w-full rounded-lg border border-[#162235] bg-[#0b111e] py-2.5 pl-10 pr-4 text-sm text-white placeholder-slate-600 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500/20 transition-all"
                   placeholder="e.g. devchamp"
                   required
                 />
@@ -458,16 +461,16 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
             </div>
 
             <div>
-              <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">
                 Email Address
               </label>
-              <div className="relative mt-1">
-                <Mail className="absolute top-2.5 left-3 h-4 h-4 text-slate-500" />
+              <div className="relative">
+                <Mail className="absolute top-3 left-3 h-4 w-4 text-slate-500" />
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full rounded-lg border border-slate-800 bg-slate-900/50 py-2 pl-10 pr-4 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                  className="w-full rounded-lg border border-[#162235] bg-[#0b111e] py-2.5 pl-10 pr-4 text-sm text-white placeholder-slate-600 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500/20 transition-all"
                   placeholder="name@domain.com"
                   required
                 />
@@ -475,23 +478,23 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
             </div>
 
             <div>
-              <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">
                 Choose Password
               </label>
-              <div className="relative mt-1">
-                <Lock className="absolute top-2.5 left-3 h-4 h-4 text-slate-500" />
+              <div className="relative">
+                <Lock className="absolute top-3 left-3 h-4 w-4 text-slate-500" />
                 <input
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-lg border border-slate-800 bg-slate-900/50 py-2 pl-10 pr-10 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                  className="w-full rounded-lg border border-[#162235] bg-[#0b111e] py-2.5 pl-10 pr-10 text-sm text-white placeholder-slate-600 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500/20 transition-all"
                   placeholder="••••••••"
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute top-2.5 right-3 text-slate-500 hover:text-slate-300"
+                  className="absolute top-3 right-3.5 text-slate-500 hover:text-slate-300"
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
@@ -499,16 +502,16 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
             </div>
 
             <div>
-              <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">
                 Confirm Password
               </label>
-              <div className="relative mt-1">
-                <Lock className="absolute top-2.5 left-3 h-4 h-4 text-slate-500" />
+              <div className="relative">
+                <Lock className="absolute top-3 left-3 h-4 w-4 text-slate-500" />
                 <input
                   type={showPassword ? "text" : "password"}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full rounded-lg border border-slate-800 bg-slate-900/50 py-2 pl-10 pr-10 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                  className="w-full rounded-lg border border-[#162235] bg-[#0b111e] py-2.5 pl-10 pr-10 text-sm text-white placeholder-slate-600 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500/20 transition-all"
                   placeholder="••••••••"
                   required
                 />
@@ -518,7 +521,7 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
             <button
               type="submit"
               disabled={loading}
-              className="flex w-full items-center justify-center space-x-2 rounded-lg bg-blue-600 hover:bg-blue-500 py-2.5 font-medium text-white transition-all disabled:opacity-50"
+              className="flex w-full items-center justify-center space-x-2 rounded-lg bg-[#1b58f6] hover:bg-[#2563eb] py-3 text-sm font-semibold text-white transition-all duration-200 disabled:opacity-50 cursor-pointer"
             >
               <span>{loading ? "Creating Account..." : "Register"}</span>
               {!loading && <ArrowRight className="h-4 w-4" />}
@@ -529,16 +532,16 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
         {view === "forgot" && (
           <form onSubmit={handleForgot} className="mt-6 space-y-4">
             <div>
-              <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">
                 Your Email Address
               </label>
-              <div className="relative mt-1">
-                <Mail className="absolute top-2.5 left-3 h-4 h-4 text-slate-500" />
+              <div className="relative">
+                <Mail className="absolute top-3 left-3 h-4 w-4 text-slate-500" />
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full rounded-lg border border-slate-800 bg-slate-900/50 py-2 pl-10 pr-4 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                  className="w-full rounded-lg border border-[#162235] bg-[#0b111e] py-2.5 pl-10 pr-4 text-sm text-white placeholder-slate-600 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500/20 transition-all"
                   placeholder="name@domain.com"
                   required
                 />
@@ -548,7 +551,7 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
             <button
               type="submit"
               disabled={loading}
-              className="flex w-full items-center justify-center space-x-2 rounded-lg bg-blue-600 hover:bg-blue-500 py-2.5 font-medium text-white transition-all disabled:opacity-50"
+              className="flex w-full items-center justify-center space-x-2 rounded-lg bg-[#1b58f6] hover:bg-[#2563eb] py-3 text-sm font-semibold text-white transition-all duration-200 disabled:opacity-50 cursor-pointer"
             >
               <span>{loading ? "Sending..." : "Recover Password"}</span>
             </button>
@@ -559,7 +562,7 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
                 setView("login");
                 resetFields();
               }}
-              className="w-full text-center text-xs text-slate-500 hover:text-slate-300"
+              className="w-full text-center text-xs text-slate-500 hover:text-slate-300 mt-2 cursor-pointer"
             >
               Back to Login
             </button>
@@ -569,42 +572,42 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
         {view === "reset" && (
           <form onSubmit={handleReset} className="mt-6 space-y-4">
             <div>
-              <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">
                 Account Email
               </label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-900/50 py-2 px-4 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                className="w-full rounded-lg border border-[#162235] bg-[#0b111e] py-2.5 px-4 text-sm text-white placeholder-slate-600 focus:border-[#1b58f6] focus:outline-none focus:ring-1 focus:ring-blue-500/20 transition-all"
                 placeholder="name@domain.com"
                 required
               />
             </div>
 
             <div>
-              <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">
                 New Secure Password
               </label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-900/50 py-2 px-4 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                className="w-full rounded-lg border border-[#162235] bg-[#0b111e] py-2.5 px-4 text-sm text-white placeholder-slate-600 focus:border-[#1b58f6] focus:outline-none focus:ring-1 focus:ring-blue-500/20 transition-all"
                 placeholder="••••••••"
                 required
               />
             </div>
 
             <div>
-              <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">
                 Confirm New Password
               </label>
               <input
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-900/50 py-2 px-4 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                className="w-full rounded-lg border border-[#162235] bg-[#0b111e] py-2.5 px-4 text-sm text-white placeholder-slate-600 focus:border-[#1b58f6] focus:outline-none focus:ring-1 focus:ring-blue-500/20 transition-all"
                 placeholder="••••••••"
                 required
               />
@@ -613,7 +616,7 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
             <button
               type="submit"
               disabled={loading}
-              className="w-full rounded-lg bg-blue-600 hover:bg-blue-500 py-2.5 font-medium text-white transition-all"
+              className="w-full rounded-lg bg-[#1b58f6] hover:bg-[#2563eb] py-3 text-sm font-semibold text-white transition-all cursor-pointer"
             >
               {loading ? "Updating..." : "Update Password"}
             </button>
@@ -630,7 +633,7 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
                   resetFields();
                   onViewChange?.("register");
                 }}
-                className="font-semibold text-blue-500 hover:underline cursor-pointer"
+                className="font-semibold text-[#1b58f6] hover:underline cursor-pointer"
               >
                 Create an account
               </button>
@@ -646,7 +649,7 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
                   resetFields();
                   onViewChange?.("login");
                 }}
-                className="font-semibold text-blue-500 hover:underline cursor-pointer"
+                className="font-semibold text-[#1b58f6] hover:underline cursor-pointer"
               >
                 Log In
               </button>

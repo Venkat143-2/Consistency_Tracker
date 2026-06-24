@@ -59,7 +59,10 @@ const fetchWithRetry = async (url: string, options?: RequestInit, retries = 5, d
 };
 
 export default function App() {
-  const [token, setToken] = useState<string | null>(localStorage.getItem("ct_token"));
+  const [token, setToken] = useState<string | null>(() => {
+    const t = localStorage.getItem("ct_token");
+    return (t === "undefined" || t === "null" || !t) ? null : t;
+  });
   const [user, setUser] = useState<User | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [stats, setStats] = useState<DailyStats[]>([]);
@@ -116,6 +119,21 @@ export default function App() {
         }
 
         if (session?.user) {
+          if (session.user.email && !session.user.email_confirmed_at) {
+            console.warn("Blocked session on startup: Email is unconfirmed.");
+            try {
+              await supabase.auth.signOut();
+            } catch (err) {
+              console.error("Error signing out unconfirmed user:", err);
+            }
+            if (mounted) {
+              setToken(null);
+              setUser(null);
+              localStorage.removeItem("ct_token");
+            }
+            return;
+          }
+
           const usernameVal = session.user.user_metadata?.username || session.user.email?.split("@")[0] || "User";
           const res = await fetchWithRetry("/api/auth/sync", {
             method: "POST",
@@ -140,7 +158,8 @@ export default function App() {
           }
         } else {
           // Local fallback using ct_token from localStorage
-          const localToken = localStorage.getItem("ct_token");
+          const rawLocalToken = localStorage.getItem("ct_token");
+          const localToken = (rawLocalToken === "undefined" || rawLocalToken === "null" || !rawLocalToken) ? null : rawLocalToken;
           if (localToken) {
             try {
               const res = await fetchWithRetry("/api/auth/me", {
@@ -185,6 +204,19 @@ export default function App() {
       const authListener = supabase.auth.onAuthStateChange(async (event, session) => {
         if (!mounted) return;
         if (session?.user) {
+          if (session.user.email && !session.user.email_confirmed_at) {
+            console.warn("Blocked reactive session change: Email is unconfirmed.");
+            try {
+              await supabase.auth.signOut();
+            } catch (err) {
+              console.error("Error signing out unconfirmed user:", err);
+            }
+            setUser(null);
+            setToken(null);
+            localStorage.removeItem("ct_token");
+            return;
+          }
+
           const usernameVal = session.user.user_metadata?.username || session.user.email?.split("@")[0] || "User";
           try {
             const res = await fetchWithRetry("/api/auth/sync", {

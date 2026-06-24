@@ -3,8 +3,20 @@
  * Apache-2.0
  */
 
-import express, { Request, Response, NextFunction } from "express";
+import dotenv from "dotenv";
+import fs from "fs";
 import path from "path";
+
+// Load environment variables from .env.local first (takes precedence), then fall back to .env
+const envLocalPath = path.resolve(process.cwd(), ".env.local");
+const envPath = path.resolve(process.cwd(), ".env");
+
+if (fs.existsSync(envLocalPath)) {
+  dotenv.config({ path: envLocalPath });
+}
+dotenv.config({ path: envPath });
+
+import express, { Request, Response, NextFunction } from "express";
 import { dbService, getLocalDateString } from "./server/db.js";
 import { TaskCategory } from "./src/types.js";
 import { createClient } from "@supabase/supabase-js";
@@ -96,6 +108,10 @@ app.use(express.json({ limit: "15mb" }));
         return;
       }
       const token = authHeader.split(" ")[1];
+      if (!token || token === "null" || token === "undefined") {
+        res.status(401).json({ error: "Access denied. Invalid session token." });
+        return;
+      }
 
       let userId = token;
       let user = null;
@@ -149,8 +165,8 @@ app.use(express.json({ limit: "15mb" }));
 
   // --- API ROUTING ENTRY POINTS ---
 
-  // Auth: Register
-  app.post("/api/auth/register", (req: Request, res: Response) => {
+  // Auth: Register (Pure Supabase-only flow with strict validation and conflict checking)
+  app.post("/api/auth/register", async (req: Request, res: Response) => {
     try {
       const { username, email, password } = req.body;
       if (!username || !email || !password) {
@@ -158,29 +174,42 @@ app.use(express.json({ limit: "15mb" }));
         return;
       }
 
-      const existingUser = dbService.getUserByEmail(email);
-      if (existingUser) {
-        res.status(400).json({ error: "An account with this email already exists." });
+      const cleanUsername = username.trim();
+      const cleanEmail = email.toLowerCase().trim();
+
+      // Supabase registration
+      const { data, error } = await supabase.auth.signUp({
+        email: cleanEmail,
+        password,
+        options: {
+          data: {
+            username: cleanUsername,
+          },
+        },
+      });
+
+      if (error) {
+        const errMessage = error.message || "Registration failed via Supabase.";
+        res.status(error.status || 400).json({ error: errMessage });
         return;
       }
 
-      // Store simplistic hash or plaintext mock container
-      const passwordHash = `mock_hash_${password}`;
-      const user = dbService.createUser(username, email, passwordHash);
-
-      // Return a professional verified signup response
-      res.status(201).json({
-        user,
-        message: "A verification email has been sent. Please verify your account.",
-        token: user.id
-      });
+      if (data.user) {
+        res.status(201).json({
+          success: true,
+          message: "Verification email sent. Please check your inbox and click the confirmation link to complete registration.",
+        });
+      } else {
+        res.status(400).json({ error: "Sign up succeeded but user details were empty." });
+      }
     } catch (err: any) {
-      res.status(500).json({ error: err.message || "Failed to register user." });
+      console.error("Registration error in server.ts:", err);
+      res.status(500).json({ error: err.message || "An error occurred during registration." });
     }
   });
 
-  // Auth: Login
-  app.post("/api/auth/login", (req: Request, res: Response) => {
+  // Auth: Login (Pure Supabase-only flow)
+  app.post("/api/auth/login", async (req: Request, res: Response) => {
     try {
       const { email, password } = req.body;
       if (!email || !password) {
@@ -188,71 +217,105 @@ app.use(express.json({ limit: "15mb" }));
         return;
       }
 
-      const userRecord = dbService.getUserByEmail(email);
-      if (!userRecord) {
-        res.status(401).json({ error: "Invalid email or password." });
-        return;
-      }
-
-      const correctHash = `mock_hash_${password}`;
-      // Allow general matching, or if password is 'admin', or bypass for simplicity
-      // In full-stack demo environments, basic verification keeps testing frictionless
-      const dbUserInfo = dbService.getUsers()[userRecord.id];
-      if (dbUserInfo.passwordHash !== correctHash && password !== "admin") {
-        res.status(401).json({ error: "Invalid password." });
-        return;
-      }
-
-      // Auto verify on login for smooth sandbox testing
-      if (!userRecord.isVerified) {
-        dbService.updateUser(userRecord.id, { isVerified: true });
-        userRecord.isVerified = true;
-      }
-
-      res.json({
-        user: userRecord,
-        token: userRecord.id,
-        message: "Welcome back! Login successful."
+      // Supabase login
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
       });
+
+      if (error) {
+        res.status(error.status || 401).json({ error: error.message || "Authentication failed via Supabase." });
+        return;
+      }
+
+      if (data.user) {
+        // Enforce email verification check
+        if (data.user.email && !data.user.email_confirmed_at && !data.session) {
+          res.status(401).json({ error: "Please confirm your email address before logging in. Check your inbox for the verification link." });
+          return;
+        }
+
+        const usernameVal = data.user.user_metadata?.username || data.user.email?.split("@")[0] || "User";
+        const userRecord = dbService.getOrCreateUser(data.user.id, data.user.email!, usernameVal);
+
+        if (data.session?.access_token) {
+          await syncFromSupabase(data.user.id, data.session.access_token);
+        }
+
+        res.json({
+          user: userRecord,
+          token: data.session?.access_token || data.user.id,
+          message: "Welcome back! Login successful."
+        });
+      } else {
+        res.status(401).json({ error: "Login succeeded but user details were empty." });
+      }
     } catch (err: any) {
+      console.error("Login error in server.ts:", err);
       res.status(500).json({ error: err.message || "Authentication failed." });
     }
   });
 
-  // Auth: Forgot Password
-  app.post("/api/auth/forgot-password", (req: Request, res: Response) => {
-    const { email } = req.body;
-    if (!email) {
-      res.status(400).json({ error: "Email is required." });
-      return;
+  // Auth: Forgot Password (Pure Supabase-only flow)
+  app.post("/api/auth/forgot-password", async (req: Request, res: Response) => {
+    try {
+      const { email } = req.body;
+      if (!email) {
+        res.status(400).json({ error: "Email is required." });
+        return;
+      }
+
+      // Supabase forgot password
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${req.headers.origin || "http://localhost:3000"}/login?view=reset`,
+      });
+
+      if (error) {
+        res.status(error.status || 400).json({ error: error.message || "Failed to trigger password recovery." });
+        return;
+      }
+
+      res.json({ message: "A recovery email has been sent. Please check your inbox." });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || "Failed to process forgot password." });
     }
-    const userRecord = dbService.getUserByEmail(email);
-    if (!userRecord) {
-      res.status(404).json({ error: "No account found with this email." });
-      return;
-    }
-    res.json({ message: "A recovery email has been sent. Please check your inbox." });
   });
 
-  // Auth: Reset Password
-  app.post("/api/auth/reset-password", (req: Request, res: Response) => {
-    const { email, password } = req.body;
-    if (!email || !password) {
-      res.status(400).json({ error: "Email and new password are required." });
-      return;
+  // Auth: Reset Password (Pure Supabase-only flow)
+  app.post("/api/auth/reset-password", async (req: Request, res: Response) => {
+    try {
+      const { password } = req.body;
+      if (!password) {
+        res.status(400).json({ error: "New password is required." });
+        return;
+      }
+
+      // Supabase reset password using Bearer token of current user
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        res.status(401).json({ error: "Authentication token is required to reset password." });
+        return;
+      }
+      const token = authHeader.split(" ")[1];
+
+      const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+        global: {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      });
+
+      const { error } = await userClient.auth.updateUser({ password });
+      if (error) {
+        res.status(error.status || 400).json({ error: error.message || "Failed to update password." });
+        return;
+      }
+
+      res.json({ message: "Your password has been successfully updated. Please log in." });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || "Failed to reset password." });
     }
-    const userRecord = dbService.getUserByEmail(email);
-    if (!userRecord) {
-      res.status(404).json({ error: "No account found associated with this email." });
-      return;
-    }
-    dbService.updateUser(userRecord.id, { isVerified: true });
-    // Update raw hash
-    const users = dbService.getUsers();
-    if (users[userRecord.id]) {
-      users[userRecord.id].passwordHash = `mock_hash_${password}`;
-    }
-    res.json({ message: "Your password has been successfully updated. Please log in." });
   });
 
   // Auth: Sync Supabase User with Local Profile
