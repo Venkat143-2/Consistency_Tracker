@@ -27,6 +27,36 @@ const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL ||
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN3bmtnbXhzc21qa3FreXZ6cW5wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAxMjUwNzUsImV4cCI6MjA5NTcwMTA3NX0.VBIWcgy1BM1OaQWlzanABX8MNWU-RAtz_xfxIiBcDV4";
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+function isSupabaseNetworkError(err: any): boolean {
+  if (!err) return false;
+  
+  const message = (err.message || String(err)).toLowerCase();
+  const name = (err.name || "").toLowerCase();
+  const code = (err.code || "").toUpperCase();
+
+  return (
+    name === "authretryablefetcherror" ||
+    name.includes("fetcherror") ||
+    code === "ENOTFOUND" ||
+    code === "ECONNREFUSED" ||
+    code === "ECONNRESET" ||
+    code === "ETIMEDOUT" ||
+    code === "EPIPE" ||
+    code === "EHOSTUNREACH" ||
+    code === "EAI_AGAIN" ||
+    message.includes("fetch") ||
+    message.includes("network") ||
+    message.includes("econnrefused") ||
+    message.includes("enotfound") ||
+    message.includes("etimedout") ||
+    message.includes("econnreset") ||
+    message.includes("socket hang up") ||
+    message.includes("timeout") ||
+    message.includes("unreachable") ||
+    message === "{}"
+  );
+}
+
 async function syncFromSupabase(userId: string, token: string): Promise<void> {
   try {
     const userClient = createClient(supabaseUrl, supabaseAnonKey, {
@@ -44,7 +74,11 @@ async function syncFromSupabase(userId: string, token: string): Promise<void> {
       .single();
 
     if (error) {
-      console.warn(`[Sync] Failed to fetch profile sync for user ${userId}:`, error.message);
+      if (isSupabaseNetworkError(error)) {
+        console.warn(`[Sync] Network connection to Supabase failed during fetch for user ${userId}.`);
+      } else {
+        console.warn(`[Sync] Failed to fetch profile sync for user ${userId}:`, error.message);
+      }
       return;
     }
 
@@ -54,7 +88,11 @@ async function syncFromSupabase(userId: string, token: string): Promise<void> {
       console.log(`[Sync] Successfully restored database state from Supabase for user ${userId}`);
     }
   } catch (err: any) {
-    console.error(`[Sync] Error syncing from Supabase for user ${userId}:`, err?.message || err);
+    if (isSupabaseNetworkError(err)) {
+      console.error(`[Sync] Network connection to Supabase failed during syncFromSupabase for user ${userId}.`);
+    } else {
+      console.error(`[Sync] Error syncing from Supabase for user ${userId}:`, err?.message || err);
+    }
   }
 }
 
@@ -77,12 +115,20 @@ async function syncToSupabase(userId: string, token: string): Promise<void> {
       .eq("id", userId);
 
     if (error) {
-      console.warn(`[Sync] Failed to save profile sync for user ${userId}:`, error.message);
+      if (isSupabaseNetworkError(error)) {
+        console.warn(`[Sync] Network connection to Supabase failed during update for user ${userId}.`);
+      } else {
+        console.warn(`[Sync] Failed to save profile sync for user ${userId}:`, error.message);
+      }
     } else {
       console.log(`[Sync] Successfully saved database state to Supabase for user ${userId}`);
     }
   } catch (err: any) {
-    console.error(`[Sync] Error syncing to Supabase for user ${userId}:`, err?.message || err);
+    if (isSupabaseNetworkError(err)) {
+      console.error(`[Sync] Network connection to Supabase failed during syncToSupabase for user ${userId}.`);
+    } else {
+      console.error(`[Sync] Error syncing to Supabase for user ${userId}:`, err?.message || err);
+    }
   }
 }
 
@@ -92,6 +138,13 @@ function getDaysBetween(d1: string, d2: string): number {
   const date2 = new Date(d2);
   const diffTime = Math.abs(date2.getTime() - date1.getTime());
   return Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+}
+
+// Helper to safely parse HTTP status codes from Supabase / external services
+function getSafeStatus(status: any, defaultStatus = 400): number {
+  if (!status) return defaultStatus;
+  const num = Number(status);
+  return (isNaN(num) || num < 100 || num > 599) ? defaultStatus : num;
 }
 
 const app = express();
@@ -120,8 +173,27 @@ app.use(express.json({ limit: "15mb" }));
 
       if (token.includes(".")) {
         // Supabase JWT authentication
-        const { data: { user: sbUser }, error } = await supabase.auth.getUser(token);
-        if (error || !sbUser) {
+        let sbUser = null;
+        try {
+          const { data: { user }, error } = await supabase.auth.getUser(token);
+          if (error) {
+            if (isSupabaseNetworkError(error)) {
+              res.status(503).json({ error: "Network connection to Supabase failed. Unable to authenticate session." });
+              return;
+            }
+            res.status(401).json({ error: "Invalid Supabase session." });
+            return;
+          }
+          sbUser = user;
+        } catch (authErr: any) {
+          if (isSupabaseNetworkError(authErr)) {
+            res.status(503).json({ error: "Network connection to Supabase failed. Unable to verify token." });
+            return;
+          }
+          throw authErr;
+        }
+
+        if (!sbUser) {
           res.status(401).json({ error: "Invalid Supabase session." });
           return;
         }
@@ -180,19 +252,34 @@ app.use(express.json({ limit: "15mb" }));
       const cleanEmail = email.toLowerCase().trim();
 
       // Supabase registration
-      const { data, error } = await supabase.auth.signUp({
-        email: cleanEmail,
-        password,
-        options: {
-          data: {
-            username: cleanUsername,
+      let data, error;
+      try {
+        const result = await supabase.auth.signUp({
+          email: cleanEmail,
+          password,
+          options: {
+            data: {
+              username: cleanUsername,
+            },
           },
-        },
-      });
+        });
+        data = result.data;
+        error = result.error;
+      } catch (signUpErr: any) {
+        if (isSupabaseNetworkError(signUpErr)) {
+          res.status(503).json({ error: "Network connection to Supabase failed. Please make sure that your custom Supabase project is active and try again." });
+          return;
+        }
+        throw signUpErr;
+      }
 
       if (error) {
+        if (isSupabaseNetworkError(error)) {
+          res.status(503).json({ error: "Network connection to Supabase failed. Please make sure that your custom Supabase project is active and try again." });
+          return;
+        }
         const errMessage = error.message || "Registration failed via Supabase.";
-        res.status(error.status || 400).json({ error: errMessage });
+        res.status(getSafeStatus(error.status, 400)).json({ error: errMessage });
         return;
       }
 
@@ -220,13 +307,28 @@ app.use(express.json({ limit: "15mb" }));
       }
 
       // Supabase login
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      let data, error;
+      try {
+        const result = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        data = result.data;
+        error = result.error;
+      } catch (signInErr: any) {
+        if (isSupabaseNetworkError(signInErr)) {
+          res.status(503).json({ error: "Network connection to Supabase failed. Please verify that your custom Supabase project is active and try again." });
+          return;
+        }
+        throw signInErr;
+      }
 
       if (error) {
-        res.status(error.status || 401).json({ error: error.message || "Authentication failed via Supabase." });
+        if (isSupabaseNetworkError(error)) {
+          res.status(503).json({ error: "Network connection to Supabase failed. Please check your internet connection." });
+          return;
+        }
+        res.status(getSafeStatus(error.status, 401)).json({ error: error.message || "Authentication failed via Supabase." });
         return;
       }
 
@@ -268,18 +370,36 @@ app.use(express.json({ limit: "15mb" }));
       }
 
       // Supabase forgot password
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${req.headers.origin || "http://localhost:3000"}/login?view=reset`,
-      });
+      let error;
+      try {
+        const result = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${req.headers.origin || "http://localhost:3000"}/login?view=reset`,
+        });
+        error = result.error;
+      } catch (forgotErr: any) {
+        if (isSupabaseNetworkError(forgotErr)) {
+          res.status(503).json({ error: "Network connection to Supabase failed. Unable to trigger password recovery." });
+          return;
+        }
+        throw forgotErr;
+      }
 
       if (error) {
-        res.status(error.status || 400).json({ error: error.message || "Failed to trigger password recovery." });
+        if (isSupabaseNetworkError(error)) {
+          res.status(503).json({ error: "Network connection to Supabase failed. Please try again." });
+          return;
+        }
+        res.status(getSafeStatus(error.status, 400)).json({ error: error.message || "Failed to trigger password recovery." });
         return;
       }
 
       res.json({ message: "A recovery email has been sent. Please check your inbox." });
     } catch (err: any) {
-      res.status(500).json({ error: err.message || "Failed to process forgot password." });
+      if (isSupabaseNetworkError(err)) {
+        res.status(503).json({ error: "Network connection to Supabase failed." });
+      } else {
+        res.status(500).json({ error: err.message || "Failed to process forgot password." });
+      }
     }
   });
 
@@ -308,15 +428,34 @@ app.use(express.json({ limit: "15mb" }));
         },
       });
 
-      const { error } = await userClient.auth.updateUser({ password });
+      let error;
+      try {
+        const result = await userClient.auth.updateUser({ password });
+        error = result.error;
+      } catch (resetErr: any) {
+        if (isSupabaseNetworkError(resetErr)) {
+          res.status(503).json({ error: "Network connection to Supabase failed. Unable to reset password." });
+          return;
+        }
+        throw resetErr;
+      }
+
       if (error) {
-        res.status(error.status || 400).json({ error: error.message || "Failed to update password." });
+        if (isSupabaseNetworkError(error)) {
+          res.status(503).json({ error: "Network connection to Supabase failed. Please try again." });
+          return;
+        }
+        res.status(getSafeStatus(error.status, 400)).json({ error: error.message || "Failed to update password." });
         return;
       }
 
       res.json({ message: "Your password has been successfully updated. Please log in." });
     } catch (err: any) {
-      res.status(500).json({ error: err.message || "Failed to reset password." });
+      if (isSupabaseNetworkError(err)) {
+        res.status(503).json({ error: "Network connection to Supabase failed." });
+      } else {
+        res.status(500).json({ error: err.message || "Failed to reset password." });
+      }
     }
   });
 
@@ -347,7 +486,11 @@ app.use(express.json({ limit: "15mb" }));
       res.json({ user, token: token || id });
     } catch (err: any) {
       console.error("Session sync failed:", err);
-      res.status(500).json({ error: err.message || "Session sync failed." });
+      if (isSupabaseNetworkError(err)) {
+        res.status(503).json({ error: "Network connection to Supabase failed. Session sync failed." });
+      } else {
+        res.status(500).json({ error: err.message || "Session sync failed." });
+      }
     }
   });
 

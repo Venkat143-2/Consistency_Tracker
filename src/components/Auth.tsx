@@ -13,7 +13,10 @@ async function safeFetchJson(url: string, options: RequestInit): Promise<any> {
   
   const trimmed = text.trim();
   if (trimmed.startsWith("<!DOCTYPE") || trimmed.startsWith("<html") || trimmed.includes("The page cannot be found")) {
-    throw new Error(`Server returned HTML instead of JSON. Ensure the server is running and the route '${url}' is registered.`);
+    const htmlErr = new Error(`Server returned HTML instead of JSON. Ensure the server is running and the route '${url}' is registered.`);
+    (htmlErr as any).status = response.status;
+    (htmlErr as any).statusText = response.statusText;
+    throw htmlErr;
   }
 
   let data: any;
@@ -21,13 +24,22 @@ async function safeFetchJson(url: string, options: RequestInit): Promise<any> {
     data = JSON.parse(text);
   } catch (err: any) {
     if (!response.ok) {
-      throw new Error(`Server returned status ${response.status}: ${response.statusText || "Request failed"}`);
+      const parseErr = new Error(`Server returned status ${response.status}: ${response.statusText || "Request failed"}`);
+      (parseErr as any).status = response.status;
+      (parseErr as any).statusText = response.statusText;
+      throw parseErr;
     }
-    throw new Error(err.message || "Unable to parse server response.");
+    const rawErr = new Error(err.message || "Unable to parse server response.");
+    (rawErr as any).status = response.status;
+    throw rawErr;
   }
 
   if (!response.ok) {
-    throw new Error(data.error || `Server responded with error status ${response.status}`);
+    const errorObj = new Error(data.error || `Server responded with error status ${response.status}`);
+    (errorObj as any).status = response.status;
+    (errorObj as any).statusText = response.statusText;
+    (errorObj as any).responseBody = data;
+    throw errorObj;
   }
   return data;
 }
@@ -39,13 +51,18 @@ function formatSupabaseError(err: any): string {
   // Detect network or fetch connection failures specifically
   const isNetworkOrFetchError = 
     err.name === "AuthRetryableFetchError" ||
+    err.status === 503 ||
     (err.message && (
       err.message.includes("fetch") || 
       err.message.includes("Failed to fetch") || 
       err.message.includes("NetworkError") ||
+      err.message.includes("Network connection to Supabase failed") ||
+      err.message.includes("unreachable") ||
+      err.message.includes("getaddrinfo") ||
+      err.message.includes("ECONN") ||
+      err.message.includes("socket hang up") ||
       err.message === "{}"
-    )) ||
-    err.status === 500;
+    ));
 
   if (isNetworkOrFetchError) {
     return (
@@ -53,6 +70,17 @@ function formatSupabaseError(err: any): string {
       "1. Your custom Supabase project is active and not paused.\n" +
       "2. The VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY env variables are configured correctly.\n" +
       "3. No ad blocker or firewall is blocking requests to your Supabase domain."
+    );
+  }
+
+  if (err.status === 500) {
+    const detail = err.message || "An internal error occurred on Supabase or the server.";
+    return (
+      `Database or Server Error (500): ${detail}\n\n` +
+      "Troubleshooting Tips:\n" +
+      "1. If this occurred during sign up, it is highly likely that your Supabase database schema has not been initialized. " +
+      "Please run the SQL schema defined in 'supabase_schema.sql' inside your Supabase SQL Editor to create the necessary 'profiles' table and signup triggers.\n" +
+      "2. Check your Supabase project Logs under API / Auth for more details on the failing query/trigger."
     );
   }
 
@@ -116,10 +144,12 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
+  const [diagnosticLog, setDiagnosticLog] = useState<any>(null);
 
   const resetFields = () => {
     setError("");
     setSuccessMsg("");
+    setDiagnosticLog(null);
   };
 
   const getAccessTokenFromUrl = () => {
@@ -183,6 +213,7 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
         setError("Could not establish session. Please verify your credentials.");
       }
     } catch (err: any) {
+      setDiagnosticLog(err);
       const formattedErr = formatSupabaseError(err);
       console.warn("Login failed:", formattedErr);
       setError(formattedErr);
@@ -233,6 +264,7 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
         resetFields();
       }, 5000);
     } catch (err: any) {
+      setDiagnosticLog(err);
       const formattedErr = formatSupabaseError(err);
       console.error("Sign up failed:", formattedErr);
       setError(formattedErr);
@@ -353,6 +385,35 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-500" />
               <div className="flex-1">
                 <span>{error}</span>
+                {diagnosticLog && (
+                  <div className="mt-3 pt-3 border-t border-rose-500/20">
+                    <p className="font-semibold text-rose-300 flex items-center gap-1.5 mb-1.5">
+                      <Database className="h-3 w-3 text-rose-400" />
+                      Diagnostic Details (Raw Error Log):
+                    </p>
+                    <div className="bg-[#050811]/90 rounded border border-rose-500/15 p-2.5 font-mono text-[10px] text-rose-300 max-h-48 overflow-y-auto">
+                      {diagnosticLog.status && (
+                        <div className="mb-1.5 font-bold text-rose-400">
+                          HTTP Status Code: {diagnosticLog.status} {diagnosticLog.statusText && `(${diagnosticLog.statusText})`}
+                        </div>
+                      )}
+                      {diagnosticLog.responseBody ? (
+                        <pre className="whitespace-pre-wrap overflow-x-auto text-rose-400/90 leading-normal">
+                          {JSON.stringify(diagnosticLog.responseBody, null, 2)}
+                        </pre>
+                      ) : (
+                        <pre className="whitespace-pre-wrap overflow-x-auto text-rose-400/90 leading-normal">
+                          {JSON.stringify({
+                            message: diagnosticLog.message || String(diagnosticLog),
+                            name: diagnosticLog.name,
+                            code: diagnosticLog.code,
+                            status: diagnosticLog.status,
+                          }, null, 2)}
+                        </pre>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
