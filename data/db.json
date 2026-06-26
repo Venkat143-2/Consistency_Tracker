@@ -29,13 +29,49 @@
       "theme": "dark",
       "isVerified": true,
       "passwordHash": "supabase_managed"
+    },
+    "52649a33-2c93-46df-a27c-1796b56f4e3d": {
+      "id": "52649a33-2c93-46df-a27c-1796b56f4e3d",
+      "username": "eliminator",
+      "email": "king2251411120@gmail.com",
+      "profilePicture": "letter:E:bg-cyan-600",
+      "createdAt": "2026-06-24T16:42:53.136Z",
+      "currentStreak": 0,
+      "longestStreak": 0,
+      "totalTasksCompleted": 0,
+      "notificationEnabled": true,
+      "reminderTime": "09:00 AM",
+      "theme": "dark",
+      "isVerified": true,
+      "passwordHash": "supabase_managed"
     }
   },
-  "tasks": [],
+  "tasks": [
+    {
+      "id": "tsk_malovs4s0",
+      "userId": "52649a33-2c93-46df-a27c-1796b56f4e3d",
+      "title": "dsa",
+      "category": "DSA",
+      "createdAt": "2026-06-25T13:42:37.132Z",
+      "completedToday": false,
+      "displayOrder": 0
+    }
+  ],
   "completions": [],
-  "dailyStats": [],
+  "dailyStats": [
+    {
+      "id": "stat_52649a33-2c93-46df-a27c-1796b56f4e3d_2026-06-25",
+      "userId": "52649a33-2c93-46df-a27c-1796b56f4e3d",
+      "date": "2026-06-25",
+      "totalTasks": 1,
+      "completedTasks": 0,
+      "completionPercentage": 0,
+      "streakCount": 0
+    }
+  ],
   "userBadges": {
     "6f9b775e-cb0d-4c2f-92f1-22107bbef004": [],
-    "test-id": []
+    "test-id": [],
+    "52649a33-2c93-46df-a27c-1796b56f4e3d": []
   }
 }

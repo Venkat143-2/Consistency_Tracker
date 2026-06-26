@@ -42,6 +42,7 @@ interface AnalyticsSectionProps {
   categoryDistribution: { name: string; value: number }[];
   currentDayTasks: { id: string; completedToday: boolean }[];
   token: string;
+  user: any;
 }
 
 export function AnalyticsSection({
@@ -50,6 +51,7 @@ export function AnalyticsSection({
   categoryDistribution,
   currentDayTasks,
   token,
+  user,
 }: AnalyticsSectionProps) {
 
   // Calculate top stats row
@@ -93,9 +95,6 @@ export function AnalyticsSection({
       {/* Header and Title (Matching Image 4 exactly) */}
       <div className="space-y-1 pb-2 border-b border-slate-800/60">
         <h2 className="text-3xl font-black text-white tracking-tight">Analytics</h2>
-        <p className="text-sm text-slate-400 font-medium">
-          Consolidate consistency logs and performance insights.
-        </p>
       </div>
 
       {/* 3-Column Stats Row Cards (Modeled from Screenshot 4) */}
@@ -107,7 +106,6 @@ export function AnalyticsSection({
           <div className="mt-2 text-3xl font-black text-white tracking-tight">
             {currentDayTasks.length}
           </div>
-          <p className="text-[9px] text-slate-500 mt-1 uppercase font-semibold">Active tracker instances</p>
         </div>
 
         {/* Card 2: TOTAL COMPLETES */}
@@ -117,7 +115,6 @@ export function AnalyticsSection({
           <div className="mt-2 text-3xl font-black text-[#10b981] tracking-tight">
             {summary.totalTasksCompleted}
           </div>
-          <p className="text-[9px] text-slate-505 mt-1 uppercase font-semibold">All-time habits certified</p>
         </div>
 
         {/* Card 3: SUCCESS STREAK */}
@@ -128,102 +125,56 @@ export function AnalyticsSection({
             {summary.currentStreak}
             <span className="text-xs text-slate-400 font-bold uppercase">Days</span>
           </div>
-          <p className="text-[9px] text-slate-500 mt-1 uppercase font-semibold">Current running momentum</p>
         </div>
       </div>
 
-      {/* Grid container: Chart & Composition */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Left segment (col-span-2) - Consistency Graph */}
-        <div className="lg:col-span-2 rounded-xl border border-[#083047] bg-[#041a27] p-5 shadow-lg space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs font-black uppercase text-slate-400 tracking-wider flex items-center gap-1.5">
-              <TrendingUp className="h-4 w-4 text-[#04D9C4]" />
-              Consistency Graph Trend
-            </h3>
-            <span className="text-[9px] font-black uppercase bg-[#020e17] text-[#04D9C4] px-2 py-0.5 rounded border border-[#083047]">
-              Live Feed
-            </span>
-          </div>
-
-          <div className="h-[210px] w-full text-xs">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={progressGraphData} margin={{ top: 10, right: 10, left: -25, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#083047" opacity={0.4} />
-                <XAxis dataKey="date" stroke="#64748b" tickLine={false} />
-                <YAxis stroke="#64748b" tickLine={false} domain={[0, 100]} unit="%" />
-                <Tooltip
-                  contentStyle={{ backgroundColor: "#020e17", borderColor: "#083047", borderRadius: "10px" }}
-                  labelStyle={{ color: "#fff", fontWeight: "black", fontSize: "11px" }}
-                  itemStyle={{ color: "#04D9C4", fontSize: "11px" }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="Consistency Trend"
-                  stroke="#04D9C4"
-                  strokeWidth={3}
-                  dot={{ r: 4, fill: "#04D9C4", strokeWidth: 0 }}
-                  activeDot={{ r: 6 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="text-[10px] text-slate-500 text-center uppercase tracking-wide">
-            Daily rate rating leading up to present day
-          </div>
+      {/* Consistency Graph */}
+      <div className="rounded-xl border border-[#083047] bg-[#041a27] p-5 shadow-lg space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-black uppercase text-slate-400 tracking-wider flex items-center gap-1.5">
+            <TrendingUp className="h-4 w-4 text-[#04D9C4]" />
+            Consistency Graph Trend
+          </h3>
+          <span className="text-[9px] font-black uppercase bg-[#020e17] text-[#04D9C4] px-2 py-0.5 rounded border border-[#083047]">
+            Live Feed
+          </span>
         </div>
 
-        {/* Right segment (col-span-1) - Dynamic Composition */}
-        <div className="lg:col-span-1 rounded-xl border border-[#083047] bg-[#041a27] p-5 shadow-lg flex flex-col justify-between">
-          <div>
-            <h3 className="text-xs font-black uppercase text-slate-400 tracking-wider pb-2 border-b border-[#083047]/60">
-              Category Composition
-            </h3>
-            
-            <div className="mt-4 space-y-3">
-              {categoryDistribution.length === 0 ? (
-                <div className="py-10 text-center text-[11px] text-slate-550 italic uppercase">
-                  No habits distributed yet.
-                </div>
-              ) : (
-                categoryDistribution.map((cat, index) => {
-                  const colors = ["bg-[#04D9C4]", "bg-[#10b981]", "bg-amber-500", "bg-purple-500", "bg-pink-500"];
-                  const colorClass = colors[index % colors.length];
-                  return (
-                    <div key={cat.name} className="space-y-1">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-bold text-slate-300">{cat.name}</span>
-                        <span className="font-black text-white">{cat.value} goals</span>
-                      </div>
-                      <div className="h-1.5 w-full bg-[#020e17] rounded-full overflow-hidden border border-[#083047]/40">
-                        <div
-                          className={`h-full ${colorClass} rounded-full transition-all duration-500`}
-                          style={{ width: `${Math.min(100, (cat.value / (currentDayTasks.length || 1)) * 100)}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-
-          <div className="pt-3 border-t border-slate-800/60 text-[9px] text-slate-500 uppercase font-bold text-center tracking-wide mt-4">
-            Balanced routine composition index
-          </div>
+        <div className="h-[210px] w-full text-xs">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={progressGraphData} margin={{ top: 10, right: 10, left: -15, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#083047" opacity={0.4} />
+              <XAxis dataKey="date" stroke="#64748b" tickLine={false} />
+              <YAxis stroke="#64748b" tickLine={false} domain={[0, 100]} unit="%" />
+              <Tooltip
+                contentStyle={{ backgroundColor: "#020e17", borderColor: "#083047", borderRadius: "10px" }}
+                labelStyle={{ color: "#fff", fontWeight: "black", fontSize: "11px" }}
+                itemStyle={{ color: "#04D9C4", fontSize: "11px" }}
+              />
+              <Line
+                type="monotone"
+                dataKey="Consistency Trend"
+                stroke="#04D9C4"
+                strokeWidth={3}
+                dot={{ r: 4, fill: "#04D9C4", strokeWidth: 0 }}
+                activeDot={{ r: 6 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
         </div>
-
+        <div className="text-[10px] text-slate-500 text-center uppercase tracking-wide">
+          Daily rate rating leading up to present day
+        </div>
       </div>
 
       {/* GitHub Style Heatmap Grid Wrap */}
       <div className="rounded-xl border border-[#083047] overflow-hidden bg-[#041a27] p-5 shadow-lg space-y-3">
         <h3 className="text-xs font-black uppercase text-slate-400 tracking-wider">
-          Annual Contribution Heatmap
+          HEATMAP
         </h3>
         <div className="overflow-x-auto pb-1">
           <div className="min-w-[620px]">
-            <Heatmap stats={stats} token={token} />
+            <Heatmap stats={stats} token={token} summary={summary} user={user} />
           </div>
         </div>
       </div>

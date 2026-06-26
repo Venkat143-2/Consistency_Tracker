@@ -16,6 +16,10 @@ export interface User {
   reminderTime: string; // "09:00 AM", etc.
   theme: "light" | "dark";
   isVerified: boolean;
+  currentLoginStreak?: number;
+  longestLoginStreak?: number;
+  currentTaskStreak?: number;
+  longestTaskStreak?: number;
 }
 
 export type TaskCategory = "DSA" | "Java" | "Communication" | "Aptitude" | "Fitness" | "Reading" | "Other";

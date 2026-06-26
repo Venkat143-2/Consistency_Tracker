@@ -956,6 +956,7 @@ export default function App() {
                 categoryDistribution={categoryDistribution}
                 currentDayTasks={tasks}
                 token={token}
+                user={user}
               />
             )}
 
@@ -978,6 +979,8 @@ export default function App() {
                 badges={badges}
                 onUpdateProfile={handleUpdateProfile}
                 token={token}
+                consistencyScore={analyticsSummary?.consistencyScore}
+                onLogout={handleLogout}
               />
             )}
 

@@ -667,10 +667,78 @@ app.use(express.json({ limit: "15mb" }));
   });
 
   // Badges lists GET
-  app.get("/api/badges", authenticateUser, (req: Request, res: Response) => {
+  app.get("/api/badges", authenticateUser, async (req: Request, res: Response) => {
     try {
       const user = (req as any).user;
-      const badges = dbService.getUserBadges(user.id);
+      
+      // Attempt to query all missions from Supabase 'missions' table
+      let fetchedMissions: any[] = [];
+      try {
+        const { data, error } = await supabase
+          .from("missions")
+          .select("*")
+          .order("sort_order", { ascending: true });
+        
+        if (!error && data && data.length > 0) {
+          fetchedMissions = data;
+        } else if (error) {
+          console.warn("[Missions API] Supabase query error:", error.message);
+        }
+      } catch (e: any) {
+        console.warn("[Missions API] Failed to fetch missions from Supabase, falling back:", e.message);
+      }
+
+      const userBadgeIds = (dbService as any).getUserBadgeIds(user.id);
+
+      // Map Supabase missions to Badge format
+      let badges: any[] = [];
+      if (fetchedMissions.length > 0) {
+        // Map icon names to proper PascalCase icons
+        const mapIconName = (icon: string): string => {
+          if (!icon) return "Award";
+          const lower = icon.toLowerCase().trim();
+          switch (lower) {
+            case "flame": return "Flame";
+            case "trophy": return "Trophy";
+            case "circle-check":
+            case "circlecheck":
+            case "check-circle":
+            case "checkcircle2":
+              return "CheckCircle2";
+            case "shield-check":
+            case "shieldcheck":
+              return "ShieldCheck";
+            case "sparkles": return "Sparkles";
+            case "bar-chart-3":
+            case "barchart3":
+              return "BarChart3";
+            case "award": return "Award";
+            case "gem": return "Gem";
+            case "crown": return "Crown";
+            case "sprout": return "Sprout";
+            case "zap": return "Zap";
+            case "shield": return "Shield";
+            case "dumbbell": return "Dumbbell";
+            case "rocket": return "Rocket";
+            case "star": return "Star";
+            case "book": return "Book";
+            case "galaxy": return "Galaxy";
+            default: return "Award";
+          }
+        };
+
+        badges = fetchedMissions.map((m) => ({
+          id: m.key,
+          name: m.title || m.name,
+          description: m.description || `Milestone mission targeting ${m.target}`,
+          iconName: mapIconName(m.icon),
+          unlockedAt: userBadgeIds.includes(m.key) ? new Date().toISOString() : null,
+        }));
+      } else {
+        // Fallback to local comprehensive list of badges
+        badges = dbService.getUserBadges(user.id);
+      }
+
       res.json({ badges });
     } catch (err: any) {
       res.status(500).json({ error: err.message || "Failed to fetch badges." });

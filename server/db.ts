@@ -47,54 +47,64 @@ interface DBLocalSchema {
 
 // Master Badge configurations
 export const ALL_BADGES: { id: string; name: string; description: string; iconName: string }[] = [
-  {
-    id: "login_streak_7",
-    name: "7 Days Login Streak 🔥",
-    description: "Logged in for 7 consecutive days active.",
-    iconName: "Flame",
-  },
-  {
-    id: "login_streak_100",
-    name: "100 Days Login Streak 🏆",
-    description: "Locked in for 100 consecutive days of focus.",
-    iconName: "Trophy",
-  },
-  {
-    id: "streak_7",
-    name: "7 Days Completion Streak 🚀",
-    description: "Complete all active daily tasks 7 days continuous.",
-    iconName: "CheckCircle2",
-  },
-  {
-    id: "streak_30",
-    name: "30 Days Completion Streak 🛡️",
-    description: "Maintain a flawless 100% completion 30 days straight.",
-    iconName: "ShieldCheck",
-  },
-  {
-    id: "streak_100",
-    name: "100 Days Completion Streak 🌟",
-    description: "Sustain daily excellence for a 100 days streak.",
-    iconName: "Sparkles",
-  },
-  {
-    id: "volume_7",
-    name: "7 Tasks Completed ⚡",
-    description: "Checked off a total of 7 discipline tasks.",
-    iconName: "BarChart3",
-  },
-  {
-    id: "volume_100",
-    name: "100 Tasks Completed 🎓",
-    description: "Completed 100 tasks of personal commitment.",
-    iconName: "Award",
-  },
-  {
-    id: "volume_500",
-    name: "500 Tasks Completed 👑",
-    description: "Legendary milestone of 500 lifetime task completions.",
-    iconName: "Trophy",
-  },
+  // Login Streak Missions
+  { id: "login_streak_1", name: "1 Day Login Streak", description: "Complete at least one task for 1 day", iconName: "Flame" },
+  { id: "login_streak_4", name: "4 Day Login Streak", description: "Complete at least one task daily for 4 consecutive days", iconName: "Flame" },
+  { id: "login_streak_7", name: "7 Day Login Streak", description: "Complete at least one task daily for 7 consecutive days", iconName: "Flame" },
+  { id: "login_streak_15", name: "15 Day Login Streak", description: "Complete at least one task daily for 15 consecutive days", iconName: "Flame" },
+  { id: "login_streak_30", name: "30 Day Login Streak", description: "Complete at least one task daily for 30 consecutive days", iconName: "Flame" },
+  { id: "login_streak_60", name: "60 Day Login Streak", description: "Complete at least one task daily for 60 consecutive days", iconName: "Flame" },
+  { id: "login_streak_100", name: "100 Day Login Streak", description: "Complete at least one task daily for 100 consecutive days", iconName: "Flame" },
+  { id: "login_streak_125", name: "125 Day Login Streak", description: "Complete at least one task daily for 125 consecutive days", iconName: "Flame" },
+  { id: "login_streak_150", name: "150 Day Login Streak", description: "Complete at least one task daily for 150 consecutive days", iconName: "Flame" },
+  { id: "login_streak_200", name: "200 Day Login Streak", description: "Complete at least one task daily for 200 consecutive days", iconName: "Flame" },
+  { id: "login_streak_250", name: "250 Day Login Streak", description: "Complete at least one task daily for 250 consecutive days", iconName: "Flame" },
+  { id: "login_streak_300", name: "300 Day Login Streak", description: "Complete at least one task daily for 30 consecutive days", iconName: "Flame" },
+  { id: "login_streak_365", name: "365 Day Login Streak", description: "Complete at least one task daily for 365 consecutive days", iconName: "Flame" },
+
+  // Task Completion Missions
+  { id: "task_streak_1", name: "1 Task Completed", description: "Complete 1 task on a fully successful day", iconName: "Sprout" },
+  { id: "task_streak_4", name: "4 Tasks Completed", description: "Accumulate 4 completed tasks on consecutive successful days", iconName: "Sprout" },
+  { id: "task_streak_7", name: "7 Tasks Completed", description: "Accumulate 7 completed tasks on consecutive successful days", iconName: "Sprout" },
+  { id: "task_streak_15", name: "15 Tasks Completed", description: "Accumulate 15 completed tasks on consecutive successful days", iconName: "Sprout" },
+  { id: "task_streak_30", name: "30 Tasks Completed", description: "Accumulate 30 completed tasks on consecutive successful days", iconName: "Sprout" },
+  { id: "task_streak_60", name: "60 Tasks Completed", description: "Accumulate 60 completed tasks on consecutive successful days", iconName: "Sprout" },
+  { id: "task_streak_100", name: "100 Tasks Completed", description: "Accumulate 100 completed tasks on consecutive successful days", iconName: "Sprout" },
+  { id: "task_streak_125", name: "125 Tasks Completed", description: "Accumulate 125 completed tasks on consecutive successful days", iconName: "Sprout" },
+  { id: "task_streak_150", name: "150 Tasks Completed", description: "Accumulate 150 completed tasks on consecutive successful days", iconName: "Sprout" },
+  { id: "task_streak_200", name: "200 Tasks Completed", description: "Accumulate 200 completed tasks on consecutive successful days", iconName: "Sprout" },
+  { id: "task_streak_250", name: "250 Tasks Completed", description: "Accumulate 250 completed tasks on consecutive successful days", iconName: "Sprout" },
+  { id: "task_streak_300", name: "300 Tasks Completed", description: "Accumulate 300 completed tasks on consecutive successful days", iconName: "Sprout" },
+  { id: "task_streak_365", name: "365 Tasks Completed", description: "Accumulate 365 completed tasks on consecutive successful days", iconName: "Sprout" },
+
+  // Legacy & Fallbacks for Compatibility
+  { id: "cons_once", name: "Green Start", description: "Reach 100% daily consistency once", iconName: "CircleCheck" },
+  { id: "cons_7", name: "Perfect Week", description: "Maintain 100% consistency for 7 days", iconName: "Sparkles" },
+  { id: "cons_30", name: "Perfect Month", description: "Maintain 100% consistency for 30 days", iconName: "Star" },
+  { id: "cons_100", name: "Consistency Legend", description: "Maintain 100% consistency for 100 days", iconName: "Galaxy" },
+  { id: "login_1", name: "First Step", description: "Login and complete at least one task for 1 day", iconName: "Flame" },
+  { id: "login_5", name: "Consistent Starter", description: "Login and complete a task for 5 consecutive days", iconName: "Flame" },
+  { id: "login_7", name: "Weekly Warrior", description: "Login and complete a task for 7 consecutive days", iconName: "Flame" },
+  { id: "login_10", name: "Focused Mind", description: "Login and complete a task for 10 consecutive days", iconName: "Flame" },
+  { id: "login_15", name: "Half Month Hero", description: "Login and complete a task for 15 consecutive days", iconName: "Flame" },
+  { id: "login_30", name: "Monthly Master", description: "Login and complete a task for 30 consecutive days", iconName: "Flame" },
+  { id: "login_90", name: "Quarter Champion", description: "Login and complete a task for 90 consecutive days", iconName: "Gem" },
+  { id: "login_180", name: "Half Year Legend", description: "Login and complete a task for 180 consecutive days", iconName: "Crown" },
+  { id: "login_365", name: "Discipline King", description: "Login and complete a task for 365 consecutive days", iconName: "Trophy" },
+  { id: "task_5", name: "Beginner", description: "Complete all planned tasks for 5 days in a row", iconName: "Sprout" },
+  { id: "task_10", name: "Dedicated", description: "Complete all planned tasks for 10 days in a row", iconName: "Zap" },
+  { id: "task_20", name: "Focus Machine", description: "Complete all planned tasks for 20 days in a row", iconName: "Flame" },
+  { id: "task_30", name: "Discipline Builder", description: "Complete all planned tasks for 30 days in a row", iconName: "Shield" },
+  { id: "task_50", name: "Iron Will", description: "Complete all planned tasks for 50 days in a row", iconName: "Dumbbell" },
+  { id: "task_100", name: "Unbreakable", description: "Complete all planned tasks for 100 days in a row", iconName: "Rocket" },
+  { id: "task_365", name: "Legendary", description: "Complete all planned tasks for 365 days in a row", iconName: "Star" },
+  { id: "total_10", name: "First Victory", description: "Complete a total of 10 tasks", iconName: "Book" },
+  { id: "total_25", name: "Productive", description: "Complete a total of 25 tasks", iconName: "Book" },
+  { id: "total_50", name: "Achiever", description: "Complete a total of 50 tasks", iconName: "Book" },
+  { id: "total_100", name: "Performer", description: "Complete a total of 100 tasks", iconName: "Book" },
+  { id: "total_250", name: "Elite", description: "Complete a total of 250 tasks", iconName: "Gem" },
+  { id: "total_500", name: "Master", description: "Complete a total of 500 tasks", iconName: "Crown" },
+  { id: "total_1000", name: "Grandmaster", description: "Complete a total of 1000 tasks", iconName: "Trophy" },
 ];
 
 // Helper to format LocalDate as "YYYY-MM-DD"
@@ -260,17 +270,16 @@ export function recalculateCoreMetrics(userId: string) {
   // Calculate streaks chronologically
   calculatedStats.sort((a, b) => a.date.localeCompare(b.date));
 
+  // 1. Standard 100% daily consistency streak
   let currentStreak = 0;
   let longestStreak = 0;
   let rollingStreak = 0;
 
-  // Sort dates of 100% completions
   const fullyCompletedDates = calculatedStats
     .filter((s) => s.completionPercentage === 100)
     .map((s) => s.date)
     .sort();
 
-  // Calculate streaking logic
   if (fullyCompletedDates.length > 0) {
     const sortedStats = [...calculatedStats];
     let prevDate: Date | null = null;
@@ -280,7 +289,6 @@ export function recalculateCoreMetrics(userId: string) {
         if (prevDate === null) {
           rollingStreak = 1;
         } else {
-          // Check if distance is exactly 1 day
           const curDate = new Date(stat.date);
           const diffTime = Math.abs(curDate.getTime() - prevDate.getTime());
           const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -298,15 +306,11 @@ export function recalculateCoreMetrics(userId: string) {
           longestStreak = rollingStreak;
         }
       } else {
-        // Did not hit 100% today - but check if we should break rolling streak
-        // If this is a historical date, we break rolling streak
         rollingStreak = 0;
         prevDate = null;
       }
     });
 
-    // To compute currentStreak leading to TODAY:
-    // User preserves current streak if today is 100% or yesterday was 100% and they are still working on today.
     const todayStr = getLocalDateString();
     const yesterdayDate = new Date(new Date(todayStr).getTime() - 24 * 60 * 60 * 1000);
     const yesterdayStr = getLocalDateString(yesterdayDate);
@@ -315,11 +319,9 @@ export function recalculateCoreMetrics(userId: string) {
     const hasCompletedYesterday = fullyCompletedDates.includes(yesterdayStr);
 
     if (hasCompletedToday) {
-      // Current active running streak includes today
       const todayStatIdx = sortedStats.findIndex((s) => s.date === todayStr);
       currentStreak = todayStatIdx >= 0 ? sortedStats[todayStatIdx].streakCount : 1;
     } else if (hasCompletedYesterday) {
-      // Stays valid because they still have today to finish
       const yesterdayStatIdx = sortedStats.findIndex((s) => s.date === yesterdayStr);
       currentStreak = yesterdayStatIdx >= 0 ? sortedStats[yesterdayStatIdx].streakCount : 1;
     } else {
@@ -329,50 +331,158 @@ export function recalculateCoreMetrics(userId: string) {
 
   // Update totalTasksCompleted overall (unique completions overall)
   const verifiedCompletions = userCompletions.filter((c) => {
-    // Only count completions for tasks that actually exist in DB
     return db.tasks.some((t) => t.id === c.taskId && t.userId === userId);
   });
   const totalTasksCompleted = verifiedCompletions.length;
 
+  // 2. New Login Streak Calculation
+  // Completed task count >= 1 for that day
+  const loginDates = calculatedStats
+    .filter((s) => s.completedTasks >= 1)
+    .map((s) => s.date)
+    .sort();
+
+  const todayStr = getLocalDateString();
+  let currentLoginStreak = 0;
+  if (loginDates.includes(todayStr)) {
+    let checkDate = todayStr;
+    while (loginDates.includes(checkDate)) {
+      currentLoginStreak++;
+      const nextD = new Date(checkDate);
+      nextD.setDate(nextD.getDate() - 1);
+      checkDate = getLocalDateString(nextD);
+    }
+  }
+
+  let longestLoginStreak = 0;
+  let tempLoginStreak = 0;
+  let lastLoginCheckDate: string | null = null;
+  loginDates.forEach((dateStr) => {
+    if (lastLoginCheckDate === null) {
+      tempLoginStreak = 1;
+    } else {
+      const prevD = new Date(dateStr);
+      prevD.setDate(prevD.getDate() - 1);
+      const prevDStr = getLocalDateString(prevD);
+      if (lastLoginCheckDate === prevDStr) {
+        tempLoginStreak++;
+      } else {
+        tempLoginStreak = 1;
+      }
+    }
+    lastLoginCheckDate = dateStr;
+    if (tempLoginStreak > longestLoginStreak) {
+      longestLoginStreak = tempLoginStreak;
+    }
+  });
+
+  // 3. New Task Completion Streak Calculation
+  // Total completed tasks across consecutive successful days
+  let currentTaskStreak = 0;
+  let loopDate = todayStr;
+  let isTaskStreakBroken = false;
+
+  const statsByDate: Record<string, DailyStats> = {};
+  calculatedStats.forEach((s) => {
+    statsByDate[s.date] = s;
+  });
+
+  const taskDatesWithPlanned = calculatedStats.filter((s) => s.totalTasks > 0);
+  if (taskDatesWithPlanned.length > 0) {
+    const oldestDateStr = taskDatesWithPlanned[0].date;
+    while (loopDate >= oldestDateStr) {
+      const stat = statsByDate[loopDate];
+      if (stat && stat.totalTasks > 0) {
+        if (stat.completedTasks === stat.totalTasks) {
+          currentTaskStreak += stat.completedTasks;
+        } else {
+          isTaskStreakBroken = true;
+          break;
+        }
+      }
+      const d = new Date(loopDate);
+      d.setDate(d.getDate() - 1);
+      loopDate = getLocalDateString(d);
+    }
+    if (isTaskStreakBroken) {
+      currentTaskStreak = 0;
+    }
+  }
+
+  let longestTaskStreak = 0;
+  let tempTaskStreak = 0;
+  let lastSuccessfulDate: string | null = null;
+  const sortedStatsAsc = [...calculatedStats].sort((a, b) => a.date.localeCompare(b.date));
+  sortedStatsAsc.forEach((stat) => {
+    if (stat.totalTasks > 0) {
+      if (stat.completedTasks === stat.totalTasks) {
+        if (lastSuccessfulDate === null) {
+          tempTaskStreak = stat.completedTasks;
+        } else {
+          const prevD = new Date(stat.date);
+          prevD.setDate(prevD.getDate() - 1);
+          const prevDStr = getLocalDateString(prevD);
+          if (lastSuccessfulDate === prevDStr) {
+            tempTaskStreak += stat.completedTasks;
+          } else {
+            tempTaskStreak = stat.completedTasks;
+          }
+        }
+        lastSuccessfulDate = stat.date;
+        if (tempTaskStreak > longestTaskStreak) {
+          longestTaskStreak = tempTaskStreak;
+        }
+      } else {
+        tempTaskStreak = 0;
+        lastSuccessfulDate = null;
+      }
+    }
+  });
+
   // Unlocking badges dynamically
-  const earnedBadges: string[] = db.userBadges[userId] || [];
+  const earnedBadges: string[] = [];
 
-  // Volume Badges:
-  if (totalTasksCompleted >= 7 && !earnedBadges.includes("volume_7")) {
-    earnedBadges.push("volume_7");
-  }
-  if (totalTasksCompleted >= 100 && !earnedBadges.includes("volume_100")) {
-    earnedBadges.push("volume_100");
-  }
-  if (totalTasksCompleted >= 500 && !earnedBadges.includes("volume_500")) {
-    earnedBadges.push("volume_500");
-  }
+  ALL_BADGES.forEach((b) => {
+    const parts = b.id.split("_");
+    const prefix = parts[0];
+    const lastPart = parts[parts.length - 1];
+    const targetVal = parseInt(lastPart) || 1;
 
-  // Task Completion Streaks:
-  if (longestStreak >= 7 && !earnedBadges.includes("streak_7")) {
-    earnedBadges.push("streak_7");
-  }
-  if (longestStreak >= 30 && !earnedBadges.includes("streak_30")) {
-    earnedBadges.push("streak_30");
-  }
-  if (longestStreak >= 100 && !earnedBadges.includes("streak_100")) {
-    earnedBadges.push("streak_100");
-  }
-
-  // Login Streak Badges:
-  // Using active days logged in calculatedStats style or matching current active streak
-  const loginStreakVal = Math.max(currentStreak, longestStreak, calculatedStats.length);
-  if (loginStreakVal >= 7 && !earnedBadges.includes("login_streak_7")) {
-    earnedBadges.push("login_streak_7");
-  }
-  if (loginStreakVal >= 100 && !earnedBadges.includes("login_streak_100")) {
-    earnedBadges.push("login_streak_100");
-  }
+    if (b.id.startsWith("login_streak_")) {
+      if (currentLoginStreak >= targetVal || longestLoginStreak >= targetVal) {
+        earnedBadges.push(b.id);
+      }
+    } else if (b.id.startsWith("task_streak_")) {
+      if (currentTaskStreak >= targetVal || longestTaskStreak >= targetVal) {
+        earnedBadges.push(b.id);
+      }
+    } else if (prefix === "login") {
+      if (currentLoginStreak >= targetVal || longestLoginStreak >= targetVal) {
+        earnedBadges.push(b.id);
+      }
+    } else if (prefix === "task") {
+      if (currentStreak >= targetVal || longestStreak >= targetVal) {
+        earnedBadges.push(b.id);
+      }
+    } else if (prefix === "total") {
+      if (totalTasksCompleted >= targetVal) {
+        earnedBadges.push(b.id);
+      }
+    } else if (prefix === "cons") {
+      if (longestStreak >= targetVal) {
+        earnedBadges.push(b.id);
+      }
+    }
+  });
 
   // Write variables back to db
   user.currentStreak = currentStreak;
   user.longestStreak = longestStreak;
   user.totalTasksCompleted = totalTasksCompleted;
+  user.currentLoginStreak = currentLoginStreak;
+  user.longestLoginStreak = longestLoginStreak;
+  user.currentTaskStreak = currentTaskStreak;
+  user.longestTaskStreak = longestTaskStreak;
 
   db.userBadges[userId] = earnedBadges;
 
@@ -647,12 +757,62 @@ export const dbService = {
   },
 
   getUserBadges: (userId: string): Badge[] => {
-    const db = readDB();
-    const userBadgeIds = db.userBadges[userId] || [];
+    const userBadgeIds = dbService.getUserBadgeIds(userId);
     return ALL_BADGES.map((b) => ({
       ...b,
       unlockedAt: userBadgeIds.includes(b.id) ? new Date().toISOString() : null, // simplifed mock unlock time
     }));
+  },
+
+  getUserBadgeIds: (userId: string): string[] => {
+    const db = readDB();
+    const user = db.users[userId];
+    if (!user) return [];
+
+    const currentLoginStreak = user.currentLoginStreak || 0;
+    const longestLoginStreak = user.longestLoginStreak || 0;
+    const currentTaskStreak = user.currentTaskStreak || 0;
+    const longestTaskStreak = user.longestTaskStreak || 0;
+    const currentStreak = user.currentStreak || 0;
+    const longestStreak = user.longestStreak || 0;
+    const totalTasksCompleted = user.totalTasksCompleted || 0;
+
+    const earnedBadges: string[] = [];
+
+    ALL_BADGES.forEach((b) => {
+      const parts = b.id.split("_");
+      const prefix = parts[0];
+      const lastPart = parts[parts.length - 1];
+      const targetVal = parseInt(lastPart) || 1;
+
+      if (b.id.startsWith("login_streak_")) {
+        if (currentLoginStreak >= targetVal || longestLoginStreak >= targetVal) {
+          earnedBadges.push(b.id);
+        }
+      } else if (b.id.startsWith("task_streak_")) {
+        if (currentTaskStreak >= targetVal || longestTaskStreak >= targetVal) {
+          earnedBadges.push(b.id);
+        }
+      } else if (prefix === "login") {
+        if (currentLoginStreak >= targetVal || longestLoginStreak >= targetVal) {
+          earnedBadges.push(b.id);
+        }
+      } else if (prefix === "task") {
+        if (currentStreak >= targetVal || longestStreak >= targetVal) {
+          earnedBadges.push(b.id);
+        }
+      } else if (prefix === "total") {
+        if (totalTasksCompleted >= targetVal) {
+          earnedBadges.push(b.id);
+        }
+      } else if (prefix === "cons") {
+        if (longestStreak >= targetVal) {
+          earnedBadges.push(b.id);
+        }
+      }
+    });
+
+    return earnedBadges;
   },
 
   exportUserData: (userId: string): ExportData | null => {

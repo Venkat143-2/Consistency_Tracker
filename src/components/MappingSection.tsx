@@ -94,13 +94,6 @@ export function MappingSection({ tasks, onToggleTask, loading }: MappingSectionP
                           </div>
                           <div className="min-w-0">
                             <p className="text-xs font-bold text-slate-100 truncate">{t.title}</p>
-                            <span
-                              className={`inline-block mt-1 text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-widest ${
-                                catConfig?.color || "text-slate-400 bg-slate-900"
-                              }`}
-                            >
-                              {t.category}
-                            </span>
                           </div>
                         </div>
                         <span className="text-[10px] font-bold text-slate-450 bg-[#020e17] px-2 py-0.5 rounded border border-[#083047] shrink-0">
@@ -143,13 +136,6 @@ export function MappingSection({ tasks, onToggleTask, loading }: MappingSectionP
                           </div>
                           <div className="min-w-0">
                             <p className="text-xs font-bold line-through text-slate-500 truncate">{t.title}</p>
-                            <span
-                              className={`inline-block mt-1 text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-widest ${
-                                catConfig?.color || "text-slate-400 bg-slate-900"
-                              }`}
-                            >
-                              {t.category}
-                            </span>
                           </div>
                         </div>
                         <span className="text-[10px] font-bold text-emerald-400 bg-[#020e17] px-2 py-0.5 rounded border border-[#10b981]/15 shrink-0">

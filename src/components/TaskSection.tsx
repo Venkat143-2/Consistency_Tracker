@@ -110,7 +110,7 @@ export function TaskSection({
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingTask || !editTitle.trim()) return;
-    onEditTask(editingTask.id, editTitle.trim(), editCategory);
+    onEditTask(editingTask.id, editTitle.trim(), editingTask.category);
     setEditingTask(null);
   };
 
@@ -324,11 +324,7 @@ export function TaskSection({
       {editingTask && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-xs">
           <div className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-950 p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
-            <h4 className="text-sm font-bold uppercase tracking-wider text-white">
-              Edit Habit Task Details
-            </h4>
-
-            <form onSubmit={handleEditSubmit} className="mt-4 space-y-4">
+            <form onSubmit={handleEditSubmit} className="space-y-4">
               <div>
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                   Task Title
@@ -340,23 +336,6 @@ export function TaskSection({
                   className="mt-1.5 w-full rounded-lg border border-slate-800 bg-slate-900 px-3.5 py-2.5 text-xs text-white focus:border-blue-500 focus:outline-none"
                   required
                 />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                  Category
-                </label>
-                <select
-                  value={editCategory}
-                  onChange={(e) => setEditCategory(e.target.value as TaskCategory)}
-                  className="mt-1.5 w-full rounded-lg border border-slate-805 bg-slate-900 px-3.5 py-2.5 text-xs text-white focus:border-blue-500 focus:outline-none bg-slate-950"
-                >
-                  {categoriesList.map((cat) => (
-                    <option key={cat.value} value={cat.value}>
-                      {cat.label}
-                    </option>
-                  ))}
-                </select>
               </div>
 
               <div className="mt-6 flex justify-end space-x-2">
