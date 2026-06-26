@@ -71,7 +71,7 @@ async function syncFromSupabase(userId: string, token: string): Promise<void> {
       .from("profiles")
       .select("full_name")
       .eq("id", userId)
-      .single();
+      .maybeSingle();
 
     if (error) {
       if (isSupabaseNetworkError(error)) {
@@ -82,7 +82,46 @@ async function syncFromSupabase(userId: string, token: string): Promise<void> {
       return;
     }
 
-    if (data && data.full_name && data.full_name.startsWith("{")) {
+    if (!data) {
+      console.log(`[Sync] No profile row found for user ${userId}. Initializing default profile row...`);
+      
+      let email = "unknown@example.com";
+      let username = "User";
+      
+      // Safe, local token decoding to avoid GoTrue network calls and "User from sub claim" errors
+      try {
+        const parts = token.split(".");
+        if (parts.length === 3) {
+          const payload = JSON.parse(Buffer.from(parts[1], "base64").toString("utf-8"));
+          if (payload) {
+            if (payload.email) email = payload.email;
+            username = payload.user_metadata?.username || payload.user_metadata?.full_name || email.split("@")[0] || "User";
+          }
+        }
+      } catch (decodeErr) {
+        console.warn(`[Sync] Failed to decode JWT token to extract profile info:`, decodeErr);
+      }
+
+      const { error: insertError } = await userClient
+        .from("profiles")
+        .insert({
+          id: userId,
+          email,
+          full_name: username,
+          streak_count: 0,
+          total_tasks_completed: 0
+        });
+
+      if (insertError) {
+        if (insertError.message?.includes("foreign key") || insertError.code === "23503") {
+          console.warn(`[Sync] Skipping profile initialization: User ${userId} does not exist in Supabase Auth (foreign key constraint).`);
+        } else {
+          console.warn(`[Sync] Failed to initialize missing profile for user ${userId}:`, insertError.message);
+        }
+      } else {
+        console.log(`[Sync] Successfully initialized missing profile for user ${userId}`);
+      }
+    } else if (data.full_name && data.full_name.startsWith("{")) {
       const slice = JSON.parse(data.full_name);
       (dbService as any).importUserSlices(userId, slice);
       console.log(`[Sync] Successfully restored database state from Supabase for user ${userId}`);
