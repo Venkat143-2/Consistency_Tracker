@@ -13,7 +13,6 @@ import { AnalyticsSection } from "./components/AnalyticsSection";
 import { MissionsSection } from "./components/MissionsSection";
 import { AchievementsSection } from "./components/AchievementsSection";
 import { ProfileSection } from "./components/ProfileSection";
-import { SettingsSection } from "./components/SettingsSection";
 import { User, Task, DailyStats, Badge } from "./types";
 import { supabase } from "./lib/supabaseClient";
 import {
@@ -21,7 +20,6 @@ import {
   CheckSquare,
   BarChart3,
   User as UserIcon,
-  Settings,
   LogOut,
   Flame,
   Bell,
@@ -70,7 +68,7 @@ export default function App() {
   const [categoryDistribution, setCategoryDistribution] = useState<any[]>([]);
   const [analyticsSummary, setAnalyticsSummary] = useState<any>(null);
 
-  const [activeTab, setActiveTab] = useState<"dashboard" | "tasks" | "mapping" | "analytics" | "missions" | "achievements" | "profile" | "settings">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "tasks" | "mapping" | "analytics" | "missions" | "achievements" | "profile">("dashboard");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sessionLoading, setSessionLoading] = useState(true);
   const [dataSyncing, setDataSyncing] = useState(false);
@@ -622,7 +620,6 @@ export default function App() {
               { id: "missions", label: "Missions", icon: Target },
               { id: "achievements", label: "Achievements", icon: Trophy },
               { id: "profile", label: "Profile", icon: UserIcon },
-              { id: "settings", label: "Settings", icon: Settings },
             ] as const).map((menu) => {
               const Icon = menu.icon;
               const isActive = activeTab === menu.id;
@@ -721,7 +718,7 @@ export default function App() {
                         </p>
                       </div>
                       <p className="text-[11px] text-slate-500 text-center">
-                        Toggle notifications setup in <button onClick={() => { setActiveTab("settings"); setNotifDropdownOpen(false); }} className="text-blue-500 hover:underline">Settings</button>
+                        Daily reminder alarm is active.
                       </p>
                     </div>
                   </div>
@@ -984,16 +981,6 @@ export default function App() {
               />
             )}
 
-            {activeTab === "settings" && (
-              <SettingsSection
-                user={user}
-                onThemeToggle={handleThemeToggle}
-                onUpdatePreferences={handleUpdatePreferences}
-                onLogout={handleLogout}
-                token={token}
-              />
-            )}
-
           </main>
         </div>
 
@@ -1030,7 +1017,6 @@ export default function App() {
                 { id: "missions", label: "Missions", icon: Target },
                 { id: "achievements", label: "Achievements", icon: Trophy },
                 { id: "profile", label: "Profile", icon: UserIcon },
-                { id: "settings", label: "Settings", icon: Settings },
               ].map((menu) => {
                 const Icon = menu.icon;
                 const isActive = activeTab === menu.id;
