@@ -15,6 +15,21 @@
       "isVerified": true,
       "passwordHash": "supabase_managed"
     },
+    "vickys-mock-id": {
+      "id": "vickys-mock-id",
+      "username": "vickys",
+      "email": "vicky143244@gmail.com",
+      "profilePicture": "letter:V:bg-blue-600",
+      "createdAt": "2026-06-29T22:21:00.000Z",
+      "currentStreak": 0,
+      "longestStreak": 0,
+      "totalTasksCompleted": 0,
+      "notificationEnabled": true,
+      "reminderTime": "09:00 AM",
+      "theme": "dark",
+      "isVerified": true,
+      "passwordHash": "supabase_managed"
+    },
     "test-id": {
       "id": "test-id",
       "username": "testuser",

@@ -281,7 +281,7 @@ app.use(express.json({ limit: "15mb" }));
   // Auth: Register (Pure Supabase-only flow with strict validation and conflict checking)
   app.post("/api/auth/register", async (req: Request, res: Response) => {
     try {
-      const { username, email, password } = req.body;
+      const { username, email, password, confirmPassword } = req.body;
       if (!username || !email || !password) {
         res.status(400).json({ error: "Username, email, and password are required." });
         return;
@@ -289,6 +289,63 @@ app.use(express.json({ limit: "15mb" }));
 
       const cleanUsername = username.trim();
       const cleanEmail = email.toLowerCase().trim();
+
+      // 1. Check Username uniqueness first!
+      const allUsers = Object.values(dbService.getUsers());
+      const usernameExistsLocal = allUsers.some(u => u && typeof u.username === "string" && u.username.toLowerCase() === cleanUsername.toLowerCase());
+      if (usernameExistsLocal) {
+        res.status(400).json({ error: "Username is already taken" });
+        return;
+      }
+
+      try {
+        const { data: existingProfileUsername } = await supabase
+          .from("profiles")
+          .select("id, full_name")
+          .ilike("full_name", cleanUsername)
+          .maybeSingle();
+
+        if (existingProfileUsername) {
+          res.status(400).json({ error: "Username is already taken" });
+          return;
+        }
+      } catch (err) {
+        console.warn("Supabase username validation skipped:", err);
+      }
+
+      // 2. Check Email uniqueness second!
+      const emailExistsLocal = allUsers.some(u => u && typeof u.email === "string" && u.email.toLowerCase() === cleanEmail);
+      if (emailExistsLocal) {
+        res.status(400).json({ error: "Email already registered" });
+        return;
+      }
+
+      try {
+        const { data: existingProfileEmail } = await supabase
+          .from("profiles")
+          .select("id, email")
+          .eq("email", cleanEmail)
+          .maybeSingle();
+
+        if (existingProfileEmail) {
+          res.status(400).json({ error: "Email already registered" });
+          return;
+        }
+      } catch (err) {
+        console.warn("Supabase email validation skipped:", err);
+      }
+
+      // 3. Check password and confirmPassword match third!
+      if (confirmPassword !== undefined && password !== confirmPassword) {
+        res.status(400).json({ error: "Passwords do not match." });
+        return;
+      }
+
+      // 4. Check password length fourth!
+      if (password.length < 6) {
+        res.status(400).json({ error: "Password must be at least 6 characters." });
+        return;
+      }
 
       // Supabase registration
       let data, error;
@@ -323,6 +380,16 @@ app.use(express.json({ limit: "15mb" }));
       }
 
       if (data.user) {
+        // Handle case where Supabase allows signup but returns empty identities because of email conflict
+        const isExistingUser = data.user.identities && data.user.identities.length === 0;
+        if (isExistingUser) {
+          res.status(400).json({ error: "Email already registered" });
+          return;
+        }
+
+        // Save to local DB cache immediately upon successful Supabase registration
+        dbService.getOrCreateUser(data.user.id, cleanEmail, cleanUsername);
+
         res.status(201).json({
           success: true,
           message: "Verification email sent. Please check your inbox and click the confirmation link to complete registration.",

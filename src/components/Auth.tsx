@@ -46,78 +46,46 @@ async function safeFetchJson(url: string, options: RequestInit): Promise<any> {
 
 function formatSupabaseError(err: any): string {
   if (!err) return "An unknown error occurred.";
-  if (typeof err === "string") return err;
-  
+
+  // Extract the most specific message first
+  let rawMsg = "";
+  if (typeof err === "string") {
+    rawMsg = err;
+  } else if (err.responseBody && (err.responseBody.error || err.responseBody.message)) {
+    rawMsg = err.responseBody.error || err.responseBody.message;
+  } else {
+    rawMsg = err.message || err.description || err.error_description || String(err);
+  }
+
+  const lowered = rawMsg.toLowerCase();
+  if (lowered.includes("invalid login credentials") || lowered.includes("invalid_credentials")) {
+    return "Invalid Login Credentials";
+  }
+  if (lowered.includes("rate limit") || lowered.includes("rate_limit") || lowered.includes("exeed") || err.status === 429) {
+    return "Email Rate Limit Exeed";
+  }
+
   // Detect network or fetch connection failures specifically
   const isNetworkOrFetchError = 
     err.name === "AuthRetryableFetchError" ||
     err.status === 503 ||
-    (err.message && (
-      err.message.includes("fetch") || 
-      err.message.includes("Failed to fetch") || 
-      err.message.includes("NetworkError") ||
-      err.message.includes("Network connection to Supabase failed") ||
-      err.message.includes("unreachable") ||
-      err.message.includes("getaddrinfo") ||
-      err.message.includes("ECONN") ||
-      err.message.includes("socket hang up") ||
-      err.message === "{}"
+    (rawMsg && (
+      rawMsg.includes("fetch") || 
+      rawMsg.includes("Failed to fetch") || 
+      rawMsg.includes("NetworkError") ||
+      rawMsg.includes("Network connection to Supabase failed") ||
+      rawMsg.includes("unreachable") ||
+      rawMsg.includes("getaddrinfo") ||
+      rawMsg.includes("ECONN") ||
+      rawMsg.includes("socket hang up") ||
+      rawMsg === "{}"
     ));
 
   if (isNetworkOrFetchError) {
-    return (
-      "Network connection to Supabase failed. Please make sure that:\n" +
-      "1. Your custom Supabase project is active and not paused.\n" +
-      "2. The VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY env variables are configured correctly.\n" +
-      "3. No ad blocker or firewall is blocking requests to your Supabase domain."
-    );
+    return "Network connection failed. Please try again.";
   }
 
-  if (err.status === 500) {
-    const detail = err.message || "An internal error occurred on Supabase or the server.";
-    return (
-      `Database or Server Error (500): ${detail}\n\n` +
-      "Troubleshooting Tips:\n" +
-      "1. If this occurred during sign up, it is highly likely that your Supabase database schema has not been initialized. " +
-      "Please run the SQL schema defined in 'supabase_schema.sql' inside your Supabase SQL Editor to create the necessary 'profiles' table and signup triggers.\n" +
-      "2. Check your Supabase project Logs under API / Auth for more details on the failing query/trigger."
-    );
-  }
-
-  // Extract common Supabase / standard error fields
-  const parts: string[] = [];
-  if (err.message && err.message !== "{}") parts.push(err.message);
-  if (err.description) parts.push(err.description);
-  if (err.error_description) parts.push(err.error_description);
-  
-  if (parts.length > 0) {
-    let msg = parts.join(" ");
-    if (err.status) msg += ` (Status: ${err.status})`;
-    if (err.code) msg += ` [Code: ${err.code}]`;
-    return msg;
-  }
-
-  // Fallback: serialize non-enumerable properties of standard Error / AuthError objects
-  try {
-    const obj: any = {};
-    const keys = Object.getOwnPropertyNames(err);
-    for (const key of keys) {
-      if (err[key] !== "{}" && key !== "stack") {
-        obj[key] = err[key];
-      }
-    }
-    if (Object.keys(obj).length > 0) {
-      return JSON.stringify(obj);
-    }
-  } catch (e) {
-    // Ignore stringify errors
-  }
-
-  if (err.name) {
-    return `${err.name}: Could not connect to Supabase. Please check your credentials and project status.`;
-  }
-
-  return String(err);
+  return rawMsg;
 }
 
 interface AuthProps {
@@ -228,14 +196,6 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
       setError("All form fields are required.");
       return;
     }
-    if (password !== confirmPassword) {
-      setError("Passwords do not match.");
-      return;
-    }
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters.");
-      return;
-    }
 
     setError("");
     setLoading(true);
@@ -249,6 +209,7 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
           username, 
           email, 
           password,
+          confirmPassword,
         }),
       });
 
@@ -385,35 +346,6 @@ export function Auth({ onLoginSuccess, defaultView = "login", onViewChange, onNa
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-500" />
               <div className="flex-1">
                 <span>{error}</span>
-                {diagnosticLog && (
-                  <div className="mt-3 pt-3 border-t border-rose-500/20">
-                    <p className="font-semibold text-rose-300 flex items-center gap-1.5 mb-1.5">
-                      <Database className="h-3 w-3 text-rose-400" />
-                      Diagnostic Details (Raw Error Log):
-                    </p>
-                    <div className="bg-[#050811]/90 rounded border border-rose-500/15 p-2.5 font-mono text-[10px] text-rose-300 max-h-48 overflow-y-auto">
-                      {diagnosticLog.status && (
-                        <div className="mb-1.5 font-bold text-rose-400">
-                          HTTP Status Code: {diagnosticLog.status} {diagnosticLog.statusText && `(${diagnosticLog.statusText})`}
-                        </div>
-                      )}
-                      {diagnosticLog.responseBody ? (
-                        <pre className="whitespace-pre-wrap overflow-x-auto text-rose-400/90 leading-normal">
-                          {JSON.stringify(diagnosticLog.responseBody, null, 2)}
-                        </pre>
-                      ) : (
-                        <pre className="whitespace-pre-wrap overflow-x-auto text-rose-400/90 leading-normal">
-                          {JSON.stringify({
-                            message: diagnosticLog.message || String(diagnosticLog),
-                            name: diagnosticLog.name,
-                            code: diagnosticLog.code,
-                            status: diagnosticLog.status,
-                          }, null, 2)}
-                        </pre>
-                      )}
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
           </div>
